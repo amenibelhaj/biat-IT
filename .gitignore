@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# Temporary/backup files
+*.backup
+*.old
+
+# Bank/project data
+*.xlsx
+*.xls
+*.csv
+
+# Database backups
+backend/biat_assets_backup.sql

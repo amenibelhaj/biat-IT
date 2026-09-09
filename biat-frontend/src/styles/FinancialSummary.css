@@ -1,0 +1,11 @@
+.financial-summary { width: 100%; }
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 30px; }
+.summary-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); border-top: 4px solid #667eea; text-align: center; }
+.summary-card .icon { font-size: 32px; margin-bottom: 10px; }
+.summary-card .label { font-size: 12px; color: #666; font-weight: 600; margin-bottom: 8px; }
+.summary-card .value { font-size: 28px; color: #003366; font-weight: 700; margin-bottom: 5px; }
+.cost-center-bars { display: grid; gap: 20px; }
+.cost-center-item { padding: 15px; background: #f8f9fa; border-radius: 8px; }
+.cc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.cc-name { font-size: 13px; font-weight: 600; color: #003366; }
+.cc-stats { display: flex; gap: 12px; font-size: 12px; color: #666; }

@@ -1,0 +1,9 @@
+.replacement-roadmap { width: 100%; }
+.roadmap-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+.summary-item { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); text-align: center; border-top: 4px solid #667eea; }
+.summary-item .label { font-size: 12px; color: #666; font-weight: 600; margin-bottom: 8px; }
+.summary-item .value { font-size: 28px; color: #003366; font-weight: 700; }
+.gantt-chart { display: grid; gap: 12px; }
+.gantt-row { display: grid; grid-template-columns: 100px 1fr 120px; gap: 15px; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 6px; }
+.month-label { font-size: 12px; font-weight: 600; color: #003366; text-align: center; }
+.gantt-bar { height: 30px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); border-radius: 4px; display: flex; align-items: center; color: white; font-weight: 600; font-size: 12px; padding-left: 10px; }
