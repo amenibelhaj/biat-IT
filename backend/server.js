@@ -221,3 +221,30 @@ app.listen(PORT, () => {
   console.log(`✓ Assets: http://localhost:${PORT}/api/assets`);
   console.log(`✓ Executive: http://localhost:${PORT}/api/strategic/dashboard/executive\n`);
 });
+
+// ===== IMPORT HISTORY =====
+app.get('/api/import/history', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT id, original_filename, file_size, total_rows, imported_rows, failed_rows, 
+             errors, import_date
+      FROM import_history
+      ORDER BY import_date DESC
+      LIMIT 50
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/import/history/:id', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT * FROM import_history WHERE id = $1
+    `, [req.params.id]);
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

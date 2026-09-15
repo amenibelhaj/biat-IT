@@ -1,56 +1,88 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import '../styles/BudgetForecast.css';
 
 export default function BudgetForecast() {
+  const { formatCurrency } = useLanguage();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/strategic/dashboard/budget-forecast')
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    loadData();
   }, []);
 
-  if (loading) return <div className="loading">Loading budget forecast...</div>;
+  const loadData = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/strategic/dashboard/budget-forecast');
+      const result = await response.json();
+      setData(Array.isArray(result) ? result : []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error:', err);
+      setData([]);
+      setLoading(false);
+    }
+  };
 
-  const byQuarter = {};
+  if (loading) return <div className="loading">💰 Loading Budget Forecast...</div>;
+
+  const groupedByQuarter = {};
   data.forEach(item => {
-    if (!byQuarter[item.quarter]) byQuarter[item.quarter] = [];
-    byQuarter[item.quarter].push(item);
+    if (!groupedByQuarter[item.quarter]) {
+      groupedByQuarter[item.quarter] = { total: 0, types: [] };
+    }
+    groupedByQuarter[item.quarter].total += parseFloat(item.estimated_replacement_cost || 0);
+    groupedByQuarter[item.quarter].types.push(item);
   });
 
-  const quarters = Object.keys(byQuarter).sort();
-  const total = data.reduce((sum, d) => sum + (d.estimated_replacement_cost || 0), 0);
+  const quarters = Object.keys(groupedByQuarter).sort();
+  const totalBudget = quarters.reduce((sum, q) => sum + groupedByQuarter[q].total, 0);
 
   return (
     <div className="budget-forecast">
-      <h2>3-Year Budget Forecast</h2>
-      <div className="summary-cards">
+      <h2>💰 Budget Forecast (3-Year Projection)</h2>
+      <p className="subtitle">Replacement cost forecast by quarter in Tunisian Dinars</p>
+
+      <div className="forecast-summary">
         <div className="summary-card">
-          <div className="label">Total 3-Year Budget</div>
-          <div className="value">${(total / 1000).toFixed(0)}K</div>
+          <span>Total 3-Year Budget</span>
+          <strong>{formatCurrency(totalBudget)}</strong>
         </div>
         <div className="summary-card">
-          <div className="label">Average per Quarter</div>
-          <div className="value">${(total / (quarters.length || 1) / 1000).toFixed(0)}K</div>
+          <span>Quarters Covered</span>
+          <strong>{quarters.length}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Average per Quarter</span>
+          <strong>{formatCurrency(quarters.length > 0 ? totalBudget / quarters.length : 0)}</strong>
         </div>
       </div>
-      <div className="section">
-        <h3>Quarterly Timeline</h3>
+
+      {quarters.length === 0 ? (
+        <div className="no-data">No budget data available</div>
+      ) : (
         <div className="timeline">
-          {quarters.map(q => {
-            const cost = byQuarter[q].reduce((s, d) => s + (d.estimated_replacement_cost || 0), 0);
-            return (
-              <div key={q} className="quarter-block">
-                <div className="quarter-label">{q}</div>
-                <div className="quarter-bar">
-                  <div className="bar">${(cost / 1000).toFixed(0)}K</div>
-                </div>
+          {quarters.map(quarter => (
+            <div key={quarter} className="quarter-block">
+              <div className="quarter-header">
+                <h4>{quarter}</h4>
+                <div className="quarter-total">{formatCurrency(groupedByQuarter[quarter].total)}</div>
               </div>
-            );
-          })}
+              <div className="quarter-types">
+                {groupedByQuarter[quarter].types.map((item, idx) => (
+                  <div key={idx} className="type-item">
+                    <span className="type-name">{item.type}</span>
+                    <span className="type-cost">{formatCurrency(item.estimated_replacement_cost || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
+      )}
+
+      <div className="note">
+        <strong>📌 Note:</strong> All amounts in Tunisian Dinars (د.ت) - 1 USD = 3.1 TND
       </div>
     </div>
   );

@@ -5,8 +5,8 @@ import fr from '../locales/fr.json';
 export const LanguageContext = createContext();
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = useState('en');
-  const [currency, setCurrency] = useState('USD');
+  const [language, setLanguage] = useState('fr'); // Default French
+  const [currency, setCurrency] = useState('TND'); // Default TND for BIAT Tunisia!
 
   const translations = { en, fr };
 
@@ -19,10 +19,14 @@ export const LanguageProvider = ({ children }) => {
 
   const formatCurrency = (amount) => {
     const num = parseFloat(amount) || 0;
+    
     if (currency === 'TND') {
-      return `${(num * 3.1).toFixed(2)} د.ت`;
+      // 1 USD = 3.1 TND (Tunisian Dinar)
+      const tnd = num * 3.1;
+      return `${tnd.toFixed(2)} د.ت`;
+    } else {
+      return `$${num.toFixed(2)}`;
     }
-    return `$${num.toFixed(2)}`;
   };
 
   return (

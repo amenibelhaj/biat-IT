@@ -35,6 +35,8 @@ export default function Import() {
     formData.append('file', file);
 
     try {
+      console.log('📤 Uploading file:', file.name);
+      
       const response = await fetch('http://localhost:5000/api/import/excel', {
         method: 'POST',
         body: formData
@@ -45,15 +47,19 @@ export default function Import() {
       if (!response.ok) {
         setError(data.error || 'Upload failed');
       } else {
+        console.log('✅ Import successful:', data);
         setResult(data);
         setFile(null);
         document.getElementById('fileInput').value = '';
         
+        // Wait 2 seconds then hard refresh to reload ALL data
         setTimeout(() => {
+          console.log('🔄 Refreshing page to reload all data...');
           window.location.reload();
         }, 2000);
       }
     } catch (err) {
+      console.error('Upload error:', err);
       setError(`Upload error: ${err.message}`);
     } finally {
       setUploading(false);
@@ -92,7 +98,7 @@ export default function Import() {
           disabled={!file || uploading}
           className="upload-button"
         >
-          {uploading ? 'Uploading & Analyzing...' : '🚀 Upload & Import'}
+          {uploading ? '⏳ Uploading & Analyzing...' : '🚀 Upload & Import'}
         </button>
       </div>
 
@@ -108,7 +114,7 @@ export default function Import() {
           <span>✅ Success!</span>
           <div className="result-details">
             <p><strong>Imported:</strong> {result.imported} / {result.total} assets</p>
-            {result.errors.length > 0 && (
+            {result.errors && result.errors.length > 0 && (
               <div className="errors">
                 <strong>Errors ({result.errors.length}):</strong>
                 <ul>
@@ -119,7 +125,7 @@ export default function Import() {
                 </ul>
               </div>
             )}
-            <p className="refresh-message">Page will refresh to show imported data with automatic obsolescence analysis...</p>
+            <p className="refresh-message">📊 Page will refresh to show imported data with automatic obsolescence analysis...</p>
           </div>
         </div>
       )}
@@ -132,50 +138,41 @@ export default function Import() {
           <div className="column-item required">
             <strong>📌 General Information</strong>
             <ul>
-              <li>Inventory Code / Code inventaire</li>
-              <li>Equipment Name / Nom de l'équipement</li>
-              <li>Asset Type / Type d'actif</li>
-              <li>Site / Site d'implantation</li>
-              <li>Brand / Constructeur</li>
-              <li>Model / Modèle</li>
-              <li>Serial Number / Numéro de série</li>
-              <li>Supplier / Fournisseur</li>
-              <li>Organization / Organisation</li>
+              <li>Nom / Equipment Name</li>
+              <li>Type d'actif / Asset Type</li>
+              <li>Site / Site Location</li>
+              <li>Marque->Nom / Brand</li>
+              <li>Modèle->Nom / Model</li>
+              <li>Numéro de série / Serial Number</li>
             </ul>
           </div>
 
           <div className="column-item required">
             <strong>🔧 Technical Information</strong>
             <ul>
-              <li>IP Address / Adresse IP</li>
-              <li>Status / Statut</li>
-              <li>Criticality / Criticité</li>
-              <li>OS Version / Version IOS</li>
-              <li>OS Family / Famille OS</li>
-            </ul>
-          </div>
-
-          <div className="column-item required">
-            <strong>💰 Financial Information</strong>
-            <ul>
-              <li>Acquisition Date / Date d'acquisition</li>
-              <li>Purchase Price / Prix d'achat</li>
-              <li>Depreciation Duration / Durée d'amortissement</li>
-              <li>Cost Center / Centre de coût</li>
-              <li>Budget Code / Code budget</li>
+              <li>IP / IP Address</li>
+              <li>Statut / Status</li>
+              <li>Criticité / Criticality</li>
+              <li>Description / Type</li>
             </ul>
           </div>
 
           <div className="column-item required">
             <strong>📅 Lifecycle Dates (CRITICAL!)</strong>
             <ul>
-              <li>Production Start Date / Date mise en production</li>
-              <li>Warranty End Date / Fin de garantie</li>
-              <li>End of Sales / Date End of Sale</li>
-              <li>End of Maintenance / Date fin de maintenance</li>
-              <li>End of Support / Fin de support constructeur ⭐</li>
-              <li>End of Software Support / Fin de support logiciel</li>
-              <li>Planned Replacement Date / Date prévisionnelle de remplacement</li>
+              <li>end-of-support ⭐</li>
+              <li>end-of-maintenance</li>
+              <li>end-of-sales</li>
+              <li>Date de mise en production</li>
+            </ul>
+          </div>
+
+          <div className="column-item required">
+            <strong>💰 Financial</strong>
+            <ul>
+              <li>Date d'achat / Acquisition Date</li>
+              <li>Organisation->Nom organisation</li>
+              <li>Budget Code</li>
             </ul>
           </div>
         </div>
@@ -184,7 +181,7 @@ export default function Import() {
           <h3>📋 Status Values</h3>
           <p>Use one of these in the Status column:</p>
           <div className="status-values">
-            <span>Production</span>
+            <span>Production / en service</span>
             <span>Secours</span>
             <span>Test</span>
             <span>Hors service</span>
@@ -195,10 +192,10 @@ export default function Import() {
           <h3>🎯 Criticality Values</h3>
           <p>Use one of these in the Criticality column:</p>
           <div className="criticality-values">
-            <span>Critical</span>
-            <span>High</span>
-            <span>Medium</span>
-            <span>Low</span>
+            <span>Critical / Critique</span>
+            <span>High / Élevée</span>
+            <span>Medium / Moyen</span>
+            <span>Low / Faible</span>
           </div>
         </div>
 

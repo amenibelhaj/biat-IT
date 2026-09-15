@@ -1,0 +1,296 @@
+.import-history {
+  width: 100%;
+}
+
+.history-table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th,
+.history-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+
+.history-table th {
+  background-color: #f0f0f0;
+  font-weight: 600;
+  color: #003366;
+  position: sticky;
+  top: 0;
+}
+
+.history-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.history-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.history-table tr.success {
+  border-left: 4px solid #26de81;
+}
+
+.history-table tr.has-errors {
+  border-left: 4px solid #ffa502;
+}
+
+.filename {
+  font-weight: 600;
+  color: #003366;
+}
+
+.date {
+  color: #666;
+  font-size: 11px;
+}
+
+.number {
+  text-align: center;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+}
+
+.badge.green {
+  background: #26de81;
+}
+
+.badge.red {
+  background: #ff4757;
+}
+
+.badge.gray {
+  background: #ccc;
+  color: #666;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+}
+
+.status-badge.success {
+  background: #26de81;
+}
+
+.status-badge.partial {
+  background: #ffa502;
+}
+
+.details-btn {
+  padding: 6px 12px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.details-btn:hover {
+  background: #764ba2;
+}
+
+.no-data {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  text-align: center;
+  color: #666;
+}
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-content h3 {
+  color: #003366;
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+
+.detail-section {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.detail-section h4 {
+  color: #003366;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .label {
+  font-weight: 600;
+  color: #003366;
+  font-size: 12px;
+}
+
+.detail-row .value {
+  color: #666;
+  font-size: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 15px;
+}
+
+.stat {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  text-align: center;
+  border-left: 4px solid #667eea;
+}
+
+.stat.success {
+  border-left-color: #26de81;
+}
+
+.stat.error {
+  border-left-color: #ff4757;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #003366;
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #666;
+  font-weight: 600;
+}
+
+.error-section {
+  background: #fff3cd;
+  border-left: 4px solid #ffa502;
+}
+
+.error-section h4 {
+  color: #856404;
+}
+
+.error-list {
+  list-style: none;
+  padding: 0;
+}
+
+.error-list li {
+  padding: 8px;
+  background: white;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #666;
+  border-left: 3px solid #ff4757;
+  padding-left: 10px;
+}
+
+.error-container {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.error-message {
+  color: #d32f2f;
+  font-size: 16px;
+}
+
+.error-message p {
+  margin: 10px 0 20px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.error-message button {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.error-message button:hover {
+  background: #764ba2;
+}

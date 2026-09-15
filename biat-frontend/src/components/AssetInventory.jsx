@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import '../styles/AssetInventory.css';
 
 export default function AssetInventory() {
+  const { formatCurrency } = useLanguage();
   const [assets, setAssets] = useState([]);
   const [filteredAssets, setFilteredAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     site: '',
     status: '',
@@ -25,11 +28,20 @@ export default function AssetInventory() {
     try {
       const response = await fetch('http://localhost:5000/api/assets');
       const data = await response.json();
-      setAssets(data);
-      setFilteredAssets(data);
+      
+      console.log('Assets data:', data);
+      
+      // Ensure data is array
+      const assetsArray = Array.isArray(data) ? data : (data && typeof data === 'object' ? [data] : []);
+      
+      setAssets(assetsArray);
+      setFilteredAssets(assetsArray);
       setLoading(false);
     } catch (err) {
       console.error('Failed to load assets:', err);
+      setError(err.message);
+      setAssets([]);
+      setFilteredAssets([]);
       setLoading(false);
     }
   };
@@ -56,6 +68,7 @@ export default function AssetInventory() {
   const getStatusColor = (status) => {
     const colors = {
       'Production': '#26de81',
+      'en service': '#26de81',
       'Test': '#ffd93d',
       'Secours': '#ffa502',
       'Hors service': '#ff4757'
@@ -70,7 +83,7 @@ export default function AssetInventory() {
       'ORANGE': '#ffa502',
       'RED': '#ff4757'
     };
-    return colors[status] || '#ccc';
+    return colors[status || 'GREEN'] || '#ccc';
   };
 
   const getObsolescenceIcon = (status) => {
@@ -80,14 +93,23 @@ export default function AssetInventory() {
       'ORANGE': '🟠',
       'RED': '🔴'
     };
-    return icons[status] || '⚪';
+    return icons[status || 'GREEN'] || '⚪';
   };
 
-  if (loading) return <div className="loading">Loading assets...</div>;
+  if (loading) return <div className="loading">📦 Loading assets...</div>;
 
-  const sites = [...new Set(assets.map(a => a.site))];
-  const statuses = [...new Set(assets.map(a => a.status))];
-  const criticalities = [...new Set(assets.map(a => a.criticality))];
+  if (error) {
+    return (
+      <div className="error">
+        ❌ Error: {error}
+        <button onClick={loadAssets}>Try Again</button>
+      </div>
+    );
+  }
+
+  const sites = [...new Set(assets.map(a => a.site).filter(Boolean))];
+  const statuses = [...new Set(assets.map(a => a.status).filter(Boolean))];
+  const criticalities = [...new Set(assets.map(a => a.criticality).filter(Boolean))];
   const obsolescences = ['RED', 'ORANGE', 'YELLOW', 'GREEN'];
 
   return (
@@ -180,59 +202,62 @@ export default function AssetInventory() {
             </tr>
           </thead>
           <tbody>
-            {filteredAssets.map(asset => (
-              <tr key={asset.id} className={`risk-${asset.obsolescence_status.toLowerCase()}`}>
-                <td className="code">{asset.inventory_code}</td>
-                <td className="name"><strong>{asset.name}</strong></td>
-                <td>{asset.type}</td>
-                <td>{asset.site}</td>
-                <td>{asset.brand} {asset.model}</td>
-                <td className="serial">{asset.serial_number}</td>
-                <td className="ip">{asset.ip_address || 'N/A'}</td>
-                <td>
-                  <span className="status-badge" style={{background: getStatusColor(asset.status)}}>
-                    {asset.status}
-                  </span>
-                </td>
-                <td>
-                  <span className="criticality-badge">
-                    {asset.criticality === 'Critical' || asset.criticality === 'Critique' ? '🔴' : ''}
-                    {asset.criticality === 'High' || asset.criticality === 'Élevée' ? '🟠' : ''}
-                    {asset.criticality === 'Medium' || asset.criticality === 'Moyen' ? '🟡' : ''}
-                    {asset.criticality === 'Low' || asset.criticality === 'Faible' ? '🟢' : ''}
-                    {asset.criticality}
-                  </span>
-                </td>
-                <td className="date">
-                  {new Date(asset.end_of_support).toLocaleDateString()}
-                </td>
-                <td className="obsolescence">
-                  <span 
-                    className="obs-badge"
-                    style={{
-                      background: getObsolescenceColor(asset.obsolescence_status),
-                      color: asset.obsolescence_status === 'YELLOW' ? '#333' : 'white'
-                    }}
-                  >
-                    {getObsolescenceIcon(asset.obsolescence_status)} {asset.obsolescence_status}
-                  </span>
-                </td>
-                <td className="lifecycle">
-                  {asset.lifecycle_stage}
-                </td>
-                <td className="risk">
-                  <span className={`risk-${Math.round(asset.risk_score / 25)}`}>
-                    {Math.round(asset.risk_score)}
-                  </span>
-                </td>
-                <td className="price">${asset.purchase_price}</td>
-                <td>
-                  <button className="details-btn" onClick={() => setSelectedAsset(asset)}>
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {filteredAssets.map(asset => {
+              const obsStatus = asset.obsolescence_status || 'GREEN';
+              return (
+                <tr key={asset.id} className={`risk-${obsStatus.toLowerCase()}`}>
+                  <td className="code">{asset.inventory_code || 'N/A'}</td>
+                  <td className="name"><strong>{asset.name || 'Unknown'}</strong></td>
+                  <td>{asset.type || 'N/A'}</td>
+                  <td>{asset.site || 'N/A'}</td>
+                  <td>{(asset.brand || 'N/A')} {(asset.model || '')}</td>
+                  <td className="serial">{asset.serial_number || 'N/A'}</td>
+                  <td className="ip">{asset.ip_address || 'N/A'}</td>
+                  <td>
+                    <span className="status-badge" style={{background: getStatusColor(asset.status)}}>
+                      {asset.status || 'N/A'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="criticality-badge">
+                      {asset.criticality === 'Critical' || asset.criticality === 'Critique' || asset.criticality === 'critique' ? '🔴' : ''}
+                      {asset.criticality === 'High' || asset.criticality === 'Élevée' ? '🟠' : ''}
+                      {asset.criticality === 'Medium' || asset.criticality === 'Moyen' ? '🟡' : ''}
+                      {asset.criticality === 'Low' || asset.criticality === 'Faible' ? '🟢' : ''}
+                      {asset.criticality || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="date">
+                    {asset.end_of_support ? new Date(asset.end_of_support).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="obsolescence">
+                    <span 
+                      className="obs-badge"
+                      style={{
+                        background: getObsolescenceColor(obsStatus),
+                        color: obsStatus === 'YELLOW' ? '#333' : 'white'
+                      }}
+                    >
+                      {getObsolescenceIcon(obsStatus)} {obsStatus}
+                    </span>
+                  </td>
+                  <td className="lifecycle">
+                    {asset.lifecycle_stage || 'N/A'}
+                  </td>
+                  <td className="risk">
+                    <span className={`risk-${Math.round((asset.risk_score || 0) / 25)}`}>
+                      {Math.round(asset.risk_score || 0)}
+                    </span>
+                  </td>
+                  <td className="price">{formatCurrency(asset.purchase_price || 0)}</td>
+                  <td>
+                    <button className="details-btn" onClick={() => setSelectedAsset(asset)}>
+                      View
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -243,17 +268,17 @@ export default function AssetInventory() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={() => setSelectedAsset(null)}>✕</button>
             
-            <h2>{selectedAsset.name}</h2>
-            <p className="code">Code: {selectedAsset.inventory_code}</p>
+            <h2>{selectedAsset.name || 'Unknown'}</h2>
+            <p className="code">Code: {selectedAsset.inventory_code || 'N/A'}</p>
 
             <div className="detail-section">
               <h3>📌 General Information</h3>
               <div className="detail-grid">
-                <div><strong>Type:</strong> {selectedAsset.type}</div>
-                <div><strong>Brand:</strong> {selectedAsset.brand}</div>
-                <div><strong>Model:</strong> {selectedAsset.model}</div>
-                <div><strong>Serial Number:</strong> {selectedAsset.serial_number}</div>
-                <div><strong>Site:</strong> {selectedAsset.site}</div>
+                <div><strong>Type:</strong> {selectedAsset.type || 'N/A'}</div>
+                <div><strong>Brand:</strong> {selectedAsset.brand || 'N/A'}</div>
+                <div><strong>Model:</strong> {selectedAsset.model || 'N/A'}</div>
+                <div><strong>Serial Number:</strong> {selectedAsset.serial_number || 'N/A'}</div>
+                <div><strong>Site:</strong> {selectedAsset.site || 'N/A'}</div>
                 <div><strong>IP Address:</strong> {selectedAsset.ip_address || 'N/A'}</div>
               </div>
             </div>
@@ -261,8 +286,8 @@ export default function AssetInventory() {
             <div className="detail-section">
               <h3>🔧 Technical Information</h3>
               <div className="detail-grid">
-                <div><strong>Status:</strong> {selectedAsset.status}</div>
-                <div><strong>Criticality:</strong> {selectedAsset.criticality}</div>
+                <div><strong>Status:</strong> {selectedAsset.status || 'N/A'}</div>
+                <div><strong>Criticality:</strong> {selectedAsset.criticality || 'N/A'}</div>
                 <div><strong>OS Version:</strong> {selectedAsset.os_version || 'N/A'}</div>
               </div>
             </div>
@@ -270,21 +295,21 @@ export default function AssetInventory() {
             <div className="detail-section">
               <h3>💰 Financial Information</h3>
               <div className="detail-grid">
-                <div><strong>Purchase Price:</strong> ${selectedAsset.purchase_price}</div>
-                <div><strong>Acquisition Date:</strong> {new Date(selectedAsset.acquisition_date).toLocaleDateString()}</div>
-                <div><strong>Depreciation Duration:</strong> {selectedAsset.depreciation_duration} months</div>
-                <div><strong>Budget Code:</strong> {selectedAsset.budget_code}</div>
+                <div><strong>Purchase Price:</strong> {formatCurrency(selectedAsset.purchase_price || 0)}</div>
+                <div><strong>Acquisition Date:</strong> {selectedAsset.acquisition_date ? new Date(selectedAsset.acquisition_date).toLocaleDateString() : 'N/A'}</div>
+                <div><strong>Depreciation Duration:</strong> {selectedAsset.depreciation_duration || 'N/A'} months</div>
+                <div><strong>Budget Code:</strong> {selectedAsset.budget_code || 'N/A'}</div>
               </div>
             </div>
 
             <div className="detail-section">
               <h3>📅 Lifecycle & Obsolescence</h3>
               <div className="detail-grid">
-                <div><strong>Production Start:</strong> {new Date(selectedAsset.production_start_date).toLocaleDateString()}</div>
-                <div><strong>Warranty End:</strong> {new Date(selectedAsset.warranty_end_date).toLocaleDateString()}</div>
+                <div><strong>Production Start:</strong> {selectedAsset.production_start_date ? new Date(selectedAsset.production_start_date).toLocaleDateString() : 'N/A'}</div>
+                <div><strong>Warranty End:</strong> {selectedAsset.warranty_end_date ? new Date(selectedAsset.warranty_end_date).toLocaleDateString() : 'N/A'}</div>
                 <div><strong>End of Sales:</strong> {selectedAsset.end_of_sales ? new Date(selectedAsset.end_of_sales).toLocaleDateString() : 'N/A'}</div>
                 <div><strong>End of Maintenance:</strong> {selectedAsset.end_of_maintenance ? new Date(selectedAsset.end_of_maintenance).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>End of Support:</strong> {new Date(selectedAsset.end_of_support).toLocaleDateString()}</div>
+                <div><strong>End of Support:</strong> {selectedAsset.end_of_support ? new Date(selectedAsset.end_of_support).toLocaleDateString() : 'N/A'}</div>
                 <div><strong>End of Software Support:</strong> {selectedAsset.end_of_software_support ? new Date(selectedAsset.end_of_software_support).toLocaleDateString() : 'N/A'}</div>
                 <div><strong>Planned Replacement:</strong> {selectedAsset.replacement_date ? new Date(selectedAsset.replacement_date).toLocaleDateString() : 'N/A'}</div>
               </div>
@@ -299,23 +324,23 @@ export default function AssetInventory() {
                     className="badge"
                     style={{
                       background: getObsolescenceColor(selectedAsset.obsolescence_status),
-                      color: selectedAsset.obsolescence_status === 'YELLOW' ? '#333' : 'white'
+                      color: (selectedAsset.obsolescence_status || 'GREEN') === 'YELLOW' ? '#333' : 'white'
                     }}
                   >
-                    {getObsolescenceIcon(selectedAsset.obsolescence_status)} {selectedAsset.obsolescence_status}
+                    {getObsolescenceIcon(selectedAsset.obsolescence_status)} {selectedAsset.obsolescence_status || 'GREEN'}
                   </span>
                 </div>
                 <div className="analysis-item">
                   <span>Lifecycle Stage:</span>
-                  <span className="badge">{selectedAsset.lifecycle_stage}</span>
+                  <span className="badge">{selectedAsset.lifecycle_stage || 'N/A'}</span>
                 </div>
                 <div className="analysis-item">
                   <span>Risk Score:</span>
-                  <span className="badge">{Math.round(selectedAsset.risk_score)}/100</span>
+                  <span className="badge">{Math.round(selectedAsset.risk_score || 0)}/100</span>
                 </div>
                 <div className="analysis-item">
                   <span>Days Until End of Support:</span>
-                  <span className="badge">{selectedAsset.days_until_end_of_support}</span>
+                  <span className="badge">{selectedAsset.days_until_end_of_support || 'N/A'}</span>
                 </div>
                 <div className="analysis-item">
                   <span>At Risk:</span>

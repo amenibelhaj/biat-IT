@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import Import from './components/Import';
+import ImportHistory from './components/ImportHistory';
 import AssetInventory from './components/AssetInventory';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
 import RiskHeatMap from './components/RiskHeatMap';
@@ -36,6 +37,9 @@ function AppContent() {
             <button className={page === 'import' ? 'active' : ''} onClick={() => setPage('import')}>
               📥 Import
             </button>
+            <button className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>
+              📁 History
+            </button>
             <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>
               📦 Inventory
             </button>
@@ -63,6 +67,7 @@ function AppContent() {
 
       <main className="main-content">
         {page === 'import' && <Import />}
+        {page === 'history' && <ImportHistory />}
         {page === 'inventory' && <AssetInventory />}
         {page === 'executive' && <ExecutiveDashboard />}
         {page === 'risk' && <RiskHeatMap />}
