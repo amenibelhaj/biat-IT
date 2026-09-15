@@ -1,0 +1,29 @@
+services:
+  # Backend API (Node/Express)
+  - type: web
+    name: biat-it-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false # paste your Neon connection string in the Render dashboard
+      - key: FRONTEND_URL
+        sync: false # paste the frontend URL once deployed
+
+  # Frontend (React, served as a static site)
+  - type: web
+    name: biat-it-frontend
+    runtime: static
+    rootDir: biat-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        sync: false # paste your backend URL + /api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

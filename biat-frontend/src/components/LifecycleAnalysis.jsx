@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import '../styles/LifecycleAnalysis.css';
 
 export default function LifecycleAnalysis() {
@@ -6,7 +7,7 @@ export default function LifecycleAnalysis() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/strategic/dashboard/lifecycle-analysis')
+    fetch(`${API_BASE_URL}/strategic/dashboard/lifecycle-analysis`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));

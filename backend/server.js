@@ -7,10 +7,15 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+// In production, set FRONTEND_URL to your deployed frontend's address so that
+// only it may call this API. Left unset locally, any origin is allowed.
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+  : true;
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Create uploads folder
@@ -39,7 +44,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/import/excel', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const result = await importExcelAssets(req.file.path);
+    const result = await importExcelAssets(req.file.path, req.file.originalname, req.file.size);
     fs.unlinkSync(req.file.path);
     res.json({
       success: true,

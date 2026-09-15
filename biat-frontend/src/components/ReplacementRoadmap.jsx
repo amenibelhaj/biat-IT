@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
 import '../styles/ReplacementRoadmap.css';
 
@@ -13,7 +14,7 @@ export default function ReplacementRoadmap() {
 
   const loadData = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/strategic/dashboard/replacement-roadmap');
+      const response = await fetch(`${API_BASE_URL}/strategic/dashboard/replacement-roadmap`);
       const result = await response.json();
       console.log('Roadmap data:', result);
       setData(Array.isArray(result) ? result : []);

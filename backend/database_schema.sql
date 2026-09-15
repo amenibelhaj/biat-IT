@@ -37,6 +37,21 @@ CREATE TABLE IF NOT EXISTS cost_centers (
 );
 
 -- =====================
+-- IMPORT HISTORY TABLE
+-- =====================
+CREATE TABLE IF NOT EXISTS import_history (
+  id SERIAL PRIMARY KEY,
+  filename VARCHAR(255),
+  original_filename VARCHAR(255),
+  file_size INTEGER,
+  total_rows INTEGER,
+  imported_rows INTEGER,
+  failed_rows INTEGER,
+  errors TEXT[],
+  import_date TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
 -- ASSETS TABLE (MAIN)
 -- =====================
 CREATE TABLE IF NOT EXISTS assets (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import '../styles/ImportHistory.css';
 
 export default function ImportHistory() {
@@ -13,7 +14,7 @@ export default function ImportHistory() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/import/history');
+      const response = await fetch(`${API_BASE_URL}/import/history`);
       const data = await response.json();
       
       console.log('History data:', data);

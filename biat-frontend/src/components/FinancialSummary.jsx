@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
 import '../styles/FinancialSummary.css';
 
@@ -13,7 +14,7 @@ export default function FinancialSummary() {
 
   const loadData = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/strategic/dashboard/financial-summary');
+      const response = await fetch(`${API_BASE_URL}/strategic/dashboard/financial-summary`);
       const result = await response.json();
       setData(Array.isArray(result) ? result : []);
       setLoading(false);

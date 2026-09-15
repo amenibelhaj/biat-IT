@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import '../styles/RiskHeatMap.css';
 
 export default function RiskHeatMap() {
@@ -6,7 +7,7 @@ export default function RiskHeatMap() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/strategic/dashboard/risk-heatmap')
+    fetch(`${API_BASE_URL}/strategic/dashboard/risk-heatmap`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));

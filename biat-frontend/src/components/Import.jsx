@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 import '../styles/Import.css';
 
 export default function Import() {
@@ -37,7 +38,7 @@ export default function Import() {
     try {
       console.log('📤 Uploading file:', file.name);
       
-      const response = await fetch('http://localhost:5000/api/import/excel', {
+      const response = await fetch(`${API_BASE_URL}/import/excel`, {
         method: 'POST',
         body: formData
       });
