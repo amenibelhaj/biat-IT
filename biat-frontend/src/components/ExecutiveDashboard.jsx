@@ -1,137 +1,197 @@
 import React, { useState, useEffect } from 'react';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from 'recharts';
 import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
-import '../styles/ExecutiveDashboard.css';
+import {
+  Panel, Kpi, StatusBadge, RiskPill, Loading, EmptyState, ErrorState,
+  ChartTooltip, Legend, EstimateNotice, STATUS_COLORS, fmtDate, fmtInt
+} from './ui';
 
 export default function ExecutiveDashboard() {
-  const { formatCurrency } = useLanguage();
+  const { formatCurrency, formatCompact, t } = useLanguage();
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState('loading');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/strategic/dashboard/executive`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d) => { if (!cancelled) { setData(d); setState('ready'); } })
+      .catch((e) => { if (!cancelled) { setError(e.message); setState('error'); } });
+    return () => { cancelled = true; };
   }, []);
 
-  const loadData = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/strategic/dashboard/executive`);
-      const result = await response.json();
-      setData(result);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error:', err);
-      setLoading(false);
-    }
-  };
+  if (state === 'loading') return <Loading />;
+  if (state === 'error') return <ErrorState error={error} />;
 
-  if (loading) return <div className="loading">📊 Loading Executive Dashboard...</div>;
-  if (!data || !data.summary) return <div className="error">No data available</div>;
+  const s = data.summary || {};
+  const total = Number(s.total_assets) || 0;
+  if (!total) {
+    return <EmptyState title={t('common.noData')} text={t('common.importFirst')} />;
+  }
 
-  const { summary } = data;
+  const statusData = [
+    { key: 'RED',    name: t('status.RED'),    value: Number(s.red_count) || 0 },
+    { key: 'ORANGE', name: t('status.ORANGE'), value: Number(s.orange_count) || 0 },
+    { key: 'YELLOW', name: t('status.YELLOW'), value: Number(s.yellow_count) || 0 },
+    { key: 'GREEN',  name: t('status.GREEN'),  value: Number(s.green_count) || 0 },
+    { key: 'UNKNOWN',name: t('status.UNKNOWN'),value: Number(s.unknown_count) || 0 }
+  ].filter((d) => d.value > 0);
+
+  const typeData = (data.by_type || []).map((r) => ({
+    type: r.type,
+    total: Number(r.count),
+    expired: Number(r.red_count)
+  }));
+
+  const redShare = total ? Math.round((Number(s.red_count) / total) * 100) : 0;
 
   return (
-    <div className="executive-dashboard">
-      <h2>📊 Executive Summary</h2>
-      <p className="subtitle">Strategic overview of IT asset portfolio</p>
-      
-      <div className="kpi-section">
-        <div className="kpi-card total">
-          <div className="kpi-icon">📦</div>
-          <div className="kpi-number">{summary.total_assets || 0}</div>
-          <div className="kpi-label">Total Assets</div>
-        </div>
-
-        <div className="kpi-card red">
-          <div className="kpi-icon">🔴</div>
-          <div className="kpi-number">{summary.red_count || 0}</div>
-          <div className="kpi-label">END OF SUPPORT EXPIRED</div>
-          <div className="kpi-action">⚠️ URGENT ACTION</div>
-        </div>
-
-        <div className="kpi-card orange">
-          <div className="kpi-icon">🟠</div>
-          <div className="kpi-number">{summary.orange_count || 0}</div>
-          <div className="kpi-label">SUPPORT ENDS IN 6 MONTHS</div>
-          <div className="kpi-action">Order Now</div>
-        </div>
-
-        <div className="kpi-card yellow">
-          <div className="kpi-icon">🟡</div>
-          <div className="kpi-number">{summary.yellow_count || 0}</div>
-          <div className="kpi-label">SUPPORT 6-12 MONTHS</div>
-          <div className="kpi-action">Plan Q2/Q3</div>
-        </div>
-
-        <div className="kpi-card green">
-          <div className="kpi-icon">🟢</div>
-          <div className="kpi-number">{summary.green_count || 0}</div>
-          <div className="kpi-label">HEALTHY ASSETS</div>
-          <div className="kpi-action">Monitor</div>
-        </div>
-
-        <div className="kpi-card at-risk">
-          <div className="kpi-icon">⚠️</div>
-          <div className="kpi-number">{summary.at_risk_count || 0}</div>
-          <div className="kpi-label">CRITICAL AT RISK</div>
-        </div>
-
-        <div className="kpi-card replacement">
-          <div className="kpi-icon">🔄</div>
-          <div className="kpi-number">{summary.needs_replacement_count || 0}</div>
-          <div className="kpi-label">Need Replacement</div>
-        </div>
-
-        <div className="kpi-card financial">
-          <div className="kpi-icon">💰</div>
-          <div className="kpi-number">{formatCurrency(summary.total_asset_value || 0)}</div>
-          <div className="kpi-label">Total Asset Value</div>
-          <div className="kpi-subtitle">Tunisian Dinar</div>
-        </div>
+    <>
+      <div className="page-head">
+        <h1 className="page-title">Synthèse de direction</h1>
+        <p className="page-subtitle">
+          Position consolidée du parc IT au {new Date().toLocaleDateString('fr-FR')} — {fmtInt(total)} actifs suivis
+        </p>
       </div>
 
-      {data.top_at_risk_assets && data.top_at_risk_assets.length > 0 && (
-        <div className="at-risk-table-section">
-          <h3>🚨 Top At-Risk Assets</h3>
-          <div className="table-container">
-            <table className="at-risk-table">
-              <thead>
-                <tr>
-                  <th>Equipment</th>
-                  <th>Type</th>
-                  <th>Site</th>
-                  <th>Criticality</th>
-                  <th>Status</th>
-                  <th>End of Support</th>
-                  <th>Risk Score</th>
-                  <th>Value (TND)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.top_at_risk_assets.slice(0, 20).map(asset => (
-                  <tr key={asset.id}>
-                    <td><strong>{asset.name}</strong></td>
-                    <td>{asset.type}</td>
-                    <td>{asset.site}</td>
-                    <td>
-                      <span className={`criticality-${asset.criticality.toLowerCase()}`}>
-                        {asset.criticality}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-${asset.obsolescence_status.toLowerCase()}`}>
-                        {asset.obsolescence_status}
-                      </span>
-                    </td>
-                    <td>{new Date(asset.end_of_support).toLocaleDateString()}</td>
-                    <td><strong>{Math.round(asset.risk_score)}</strong></td>
-                    <td>{formatCurrency(asset.purchase_price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {Number(s.red_count) > 0 && (
+        <div className="notice alert">
+          <div>
+            <b>{fmtInt(s.red_count)} actif(s) hors support constructeur</b> ({redShare} % du parc).
+            Ces équipements ne reçoivent plus de correctifs de sécurité et représentent
+            un risque de conformité bancaire immédiat. Budget de régularisation estimé :
+            <b> {formatCurrency(s.immediate_budget_required)}</b>.
           </div>
         </div>
       )}
-    </div>
+
+      <div className="kpi-row">
+        <Kpi tone="navy"  label="Parc total"           value={fmtInt(total)} note="actifs sous suivi" />
+        <Kpi tone="red"   label="Support expiré"       value={fmtInt(s.red_count)}    note={`${redShare} % du parc`} />
+        <Kpi tone="orange"label="Échéance < 6 mois"    value={fmtInt(s.orange_count)} note="commande à lancer" />
+        <Kpi tone="yellow"label="Échéance < 12 mois"   value={fmtInt(s.yellow_count)} note="à budgéter" />
+        <Kpi tone="green" label="Support valide"       value={fmtInt(s.green_count)}  note="surveillance simple" />
+        <Kpi tone="accent"label="Exposition totale"    value={formatCompact(s.total_replacement_exposure)} note="coût de remplacement estimé" />
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <Panel
+          title="Répartition par niveau d'obsolescence"
+          subtitle="Classification automatique selon la date de fin de support constructeur"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+            <ResponsiveContainer width="55%" height={230} minWidth={200}>
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%" cy="50%"
+                  innerRadius={52}
+                  outerRadius={88}
+                  paddingAngle={2}
+                  stroke="#fff"
+                  strokeWidth={2}
+                >
+                  {statusData.map((entry) => (
+                    <Cell key={entry.key} fill={STATUS_COLORS[entry.key]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTooltip formatter={(v) => `${v} actifs`} />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ flex: 1, minWidth: 170 }}>
+              {statusData.map((d) => (
+                <div key={d.key} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '7px 0', borderBottom: '1px solid var(--line)'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                    <span className="legend-swatch" style={{ background: STATUS_COLORS[d.key] }} />
+                    {d.name}
+                  </span>
+                  <b className="num" style={{ fontSize: 13 }}>{d.value}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel
+          title="Parc par famille d'équipement"
+          subtitle="Volume total et part hors support"
+        >
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={typeData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="type" tick={{ fontSize: 11.5, fill: 'var(--ink-3)' }} tickLine={false} axisLine={{ stroke: 'var(--line)' }} />
+              <YAxis tick={{ fontSize: 11.5, fill: 'var(--ink-3)' }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-2)' }} />
+              <Bar dataKey="total"   name="Parc total"    fill="#1b3f6e" radius={[3, 3, 0, 0]} maxBarSize={44} />
+              <Bar dataKey="expired" name="Hors support" fill="#c2312d" radius={[3, 3, 0, 0]} maxBarSize={44} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ marginTop: 10 }}>
+            <Legend items={[
+              { label: 'Parc total', color: '#1b3f6e' },
+              { label: 'Hors support', color: '#c2312d' }
+            ]} />
+          </div>
+        </Panel>
+      </div>
+
+      <Panel
+        title="Actifs prioritaires"
+        subtitle="Classés par score de risque — urgence de l'échéance (0-60) + criticité métier (0-40)"
+      >
+        {Number(s.estimated_cost_rows) > 0 && <EstimateNotice rows={Number(s.estimated_cost_rows)} />}
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Équipement</th>
+                <th>Type</th>
+                <th>Site</th>
+                <th>Criticité</th>
+                <th>Statut</th>
+                <th>Fin de support</th>
+                <th className="right">Échéance</th>
+                <th className="right">Risque</th>
+                <th className="right">Coût est.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.top_at_risk_assets || []).map((a) => {
+                const days = a.days_until_eos === null ? null : Number(a.days_until_eos);
+                return (
+                  <tr key={a.id}>
+                    <td className="strong">{a.name}</td>
+                    <td>{a.type}</td>
+                    <td>{a.site}</td>
+                    <td>
+                      <span className={`chip ${String(a.criticality).toLowerCase()}`}>{a.criticality}</span>
+                    </td>
+                    <td><StatusBadge status={a.status_live} label={t(`status.${a.status_live}`)} /></td>
+                    <td className="mono">{fmtDate(a.end_of_support)}</td>
+                    <td className="right num" style={{ color: days !== null && days < 0 ? 'var(--st-red)' : 'inherit' }}>
+                      {days === null ? '—' : days < 0 ? `${Math.abs(days)} j dépassé` : `${days} j`}
+                    </td>
+                    <td className="right">
+                      <RiskPill score={a.risk_score_live} />
+                    </td>
+                    <td className="right num">{formatCurrency(a.estimated_replacement_cost)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </>
   );
 }

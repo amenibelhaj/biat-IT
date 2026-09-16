@@ -1,217 +1,178 @@
+/*
+ * Excel / CSV import.
+ *
+ * Two modes:
+ *   replace  clear the inventory first (default — matches "load this month's
+ *            extract and show me the position")
+ *   merge    insert new assets and update existing ones, matched on
+ *            inventory_code, so several files (network, servers, licences)
+ *            can build up one consolidated inventory
+ *
+ * Nothing time-sensitive is calculated or stored here. Obsolescence status,
+ * risk score and lifecycle stage are derived at query time by the
+ * v_assets_live view, so they stay correct as time passes.
+ */
+
 const xlsx = require('xlsx');
 const db = require('./db');
+const { estimateReplacementCost } = require('./lib/costCatalog');
+const {
+  normalizeStatus, normalizeCriticality, normalizeType,
+  parseDate, pick, pickEndOfSupport
+} = require('./lib/normalize');
 
-async function importExcelAssets(filePath, originalFilename, fileSize) {
+async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'replace') {
+  const workbook = xlsx.readFile(filePath, { cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('The file contains no worksheets');
+
+  const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
+  if (rows.length === 0) throw new Error('The first worksheet is empty');
+
+  const errors = [];
+  const warnings = [];
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  const client = await db.connect();
   try {
-    console.log(`\n📖 Reading Excel file: ${originalFilename}`);
-    
-    const workbook = xlsx.readFile(filePath);
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+    await client.query('BEGIN');
 
-    console.log(`✓ Read ${data.length} rows from Excel`);
-
-    if (data.length === 0) {
-      throw new Error('Excel file is empty');
+    if (mode === 'replace') {
+      await client.query('DELETE FROM assets');
     }
 
-    await db.query('TRUNCATE TABLE assets RESTART IDENTITY CASCADE');
-    console.log('✓ Cleared old asset data');
-
-    let imported = 0;
-    let errors = [];
-
-    for (const [idx, row] of data.entries()) {
+    for (const [idx, row] of rows.entries()) {
+      const rowNum = idx + 2; // +2: 1-based, plus the header row
       try {
+        const name = pick(row, ['Nom', 'Nom de l\'équipement', 'Name']) || null;
+        if (!name) { skipped++; errors.push(`Row ${rowNum}: no equipment name`); continue; }
+
+        const description = pick(row, ['Description', 'Sous-classe de CI', 'Type']);
+        const type = normalizeType(description, name);
+        const endOfSupport = pickEndOfSupport(row);
+
+        if (!endOfSupport) {
+          warnings.push(`Row ${rowNum} (${name}): no end-of-support date — cannot be classified`);
+        }
+
+        // A stable identifier. Serial number is preferred, then the asset
+        // number, then a deterministic fallback built from name + IP so
+        // re-importing the same file does not create duplicates.
+        const serial = pick(row, ['Numéro de série', 'Serial Number', 'S/N']);
+        const assetNo = pick(row, ['Numéro Asset', 'Code inventaire', 'Asset Number']);
+        const ip = pick(row, ['IP', 'Adresse IP', 'IP Address']);
+        const inventoryCode = String(
+          assetNo || serial || `${name}-${ip || idx}`
+        ).trim().slice(0, 100);
+
+        const estimate = estimateReplacementCost(description || type);
+        const realPrice = pick(row, ['Prix d\'achat', 'Prix', 'Purchase Price']);
+
         const asset = {
-          inventory_code: row['Numéro Asset'] || `AUTO-${idx}`,
-          name: row['Nom'] || 'Unknown',
-          type: row['Description'] || 'Unknown',
-          site: row['Site->Nom'] || 'Unknown',
-          brand: row['Marque->Nom'] || 'Unknown',
-          model: row['Modèle->Nom'] || 'Unknown',
-          serial_number: row['Numéro de série'] || 'N/A',
-          ip_address: row['IP'] || null,
-          status: normalizeStatus(row['Statut'] || 'en service'),
-          criticality: normalizeCriticality(row['Criticité'] || 'Medium'),
-          os_version: null,
-          acquisition_date: parseDate(row['Date d\'achat']),
-          production_start_date: parseDate(row['Date de mise en production']),
-          warranty_end_date: parseDate(row['Date de fin de garantie']),
-          end_of_sales: parseDate(row['end-of-sales']),
-          end_of_maintenance: parseDate(row['end-of-maintenance']),
-          end_of_support: parseDate(row['end-of-support']),
-          end_of_software_support: null,
-          purchase_price: getPriceByType(row['Description']) || 0,
-          depreciation_duration: 36,
-          budget_code: 'GENERAL'
+          inventory_code: inventoryCode,
+          name: String(name).trim().slice(0, 255),
+          type,
+          description: description ? String(description).trim() : null,
+          site: pick(row, ['Site->Nom', 'Site', 'Site d\'implantation']) || 'Non renseigné',
+          brand: pick(row, ['Marque->Nom', 'Marque', 'Constructeur', 'Brand']) || null,
+          model: pick(row, ['Modèle->Nom', 'Modèle', 'Modèle exact', 'Model']) || null,
+          serial_number: serial ? String(serial) : null,
+          ip_address: ip ? String(ip) : null,
+          status: normalizeStatus(pick(row, ['Statut', 'Status', 'Statut actuel'])),
+          criticality: normalizeCriticality(pick(row, ['Criticité', 'Criticality', 'Niveau de criticité'])),
+          os_version: pick(row, ['Version OS', 'Version IOS->Nom complet', 'Version IOS', 'Firmware']),
+          acquisition_date: parseDate(pick(row, ['Date d\'achat', 'Date d\'acquisition'])),
+          production_start_date: parseDate(pick(row, ['Date de mise en production', 'Date mise en service'])),
+          warranty_end_date: parseDate(pick(row, ['Date de fin de garantie', 'Fin de garantie'])),
+          end_of_sales: parseDate(pick(row, ['end-of-sales', 'End of Sale', 'Date (End of Sale)'])),
+          end_of_maintenance: parseDate(pick(row, ['end-of-maintenance', 'End of Maintenance', 'Date de fin de maintenance'])),
+          end_of_support: endOfSupport,
+          purchase_price: realPrice !== null && !isNaN(parseFloat(realPrice)) ? parseFloat(realPrice) : null,
+          estimated_replacement_cost: estimate.cost,
+          cost_is_estimated: !(realPrice !== null && !isNaN(parseFloat(realPrice))),
+          budget_code: pick(row, ['Budget', 'Centre de coût', 'Cost Center']) || 'NON AFFECTÉ',
+          notes: pick(row, ['Commentaire', 'Notes'])
         };
 
-        if (!asset.end_of_support) {
-          throw new Error('Missing End of Support date');
-        }
+        const result = await client.query(`
+          INSERT INTO assets (
+            inventory_code, name, type, description, site, brand, model,
+            serial_number, ip_address, status, criticality, os_version,
+            acquisition_date, production_start_date, warranty_end_date,
+            end_of_sales, end_of_maintenance, end_of_support,
+            purchase_price, estimated_replacement_cost, cost_is_estimated,
+            budget_code, notes, created_at, updated_at
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+            $19,$20,$21,$22,$23, NOW(), NOW()
+          )
+          ON CONFLICT (inventory_code) DO UPDATE SET
+            name = EXCLUDED.name,
+            type = EXCLUDED.type,
+            description = EXCLUDED.description,
+            site = EXCLUDED.site,
+            brand = EXCLUDED.brand,
+            model = EXCLUDED.model,
+            serial_number = COALESCE(EXCLUDED.serial_number, assets.serial_number),
+            ip_address = EXCLUDED.ip_address,
+            status = EXCLUDED.status,
+            criticality = EXCLUDED.criticality,
+            os_version = COALESCE(EXCLUDED.os_version, assets.os_version),
+            acquisition_date = COALESCE(EXCLUDED.acquisition_date, assets.acquisition_date),
+            production_start_date = COALESCE(EXCLUDED.production_start_date, assets.production_start_date),
+            warranty_end_date = COALESCE(EXCLUDED.warranty_end_date, assets.warranty_end_date),
+            end_of_sales = COALESCE(EXCLUDED.end_of_sales, assets.end_of_sales),
+            end_of_maintenance = COALESCE(EXCLUDED.end_of_maintenance, assets.end_of_maintenance),
+            end_of_support = COALESCE(EXCLUDED.end_of_support, assets.end_of_support),
+            purchase_price = COALESCE(EXCLUDED.purchase_price, assets.purchase_price),
+            estimated_replacement_cost = EXCLUDED.estimated_replacement_cost,
+            cost_is_estimated = EXCLUDED.cost_is_estimated,
+            updated_at = NOW()
+          RETURNING (xmax = 0) AS inserted
+        `, [
+          asset.inventory_code, asset.name, asset.type, asset.description, asset.site,
+          asset.brand, asset.model, asset.serial_number, asset.ip_address, asset.status,
+          asset.criticality, asset.os_version, asset.acquisition_date,
+          asset.production_start_date, asset.warranty_end_date, asset.end_of_sales,
+          asset.end_of_maintenance, asset.end_of_support, asset.purchase_price,
+          asset.estimated_replacement_cost, asset.cost_is_estimated,
+          asset.budget_code, asset.notes
+        ]);
 
-        // Calculate obsolescence
-        const eosDate = new Date(asset.end_of_support);
-        const today = new Date();
-        const daysUntilEos = Math.floor((eosDate - today) / (1000 * 60 * 60 * 24));
-
-        let obsolescenceStatus = 'GREEN';
-        if (daysUntilEos < 0) obsolescenceStatus = 'RED';
-        else if (daysUntilEos < 180) obsolescenceStatus = 'ORANGE';
-        else if (daysUntilEos < 365) obsolescenceStatus = 'YELLOW';
-
-        // AUTO-CALCULATE replacement_date based on obsolescence
-        let replacementDate = null;
-        const today2 = new Date();
-        
-        if (obsolescenceStatus === 'RED') {
-          const nextMonth = new Date(today2.getFullYear(), today2.getMonth() + 1, 1);
-          replacementDate = nextMonth.toISOString().split('T')[0];
-        } else if (obsolescenceStatus === 'ORANGE') {
-          const in3Months = new Date(today2.getFullYear(), today2.getMonth() + 4, 1);
-          replacementDate = in3Months.toISOString().split('T')[0];
-        } else if (obsolescenceStatus === 'YELLOW') {
-          const in9Months = new Date(today2.getFullYear(), today2.getMonth() + 9, 1);
-          replacementDate = in9Months.toISOString().split('T')[0];
-        } else {
-          const in2Years = new Date(today2.getFullYear() + 2, today2.getMonth(), 1);
-          replacementDate = in2Years.toISOString().split('T')[0];
-        }
-
-        // Calculate lifecycle stage
-        let lifecycleStage = 'Exploitation';
-        if (obsolescenceStatus === 'RED') lifecycleStage = 'Obsolescence';
-        else if (obsolescenceStatus === 'ORANGE') lifecycleStage = 'End of Support';
-        else if (obsolescenceStatus === 'YELLOW') lifecycleStage = 'Maintenance';
-
-        // Calculate risk score
-        let riskScore = 10;
-        if (daysUntilEos < 0) riskScore = 100;
-        else if (daysUntilEos < 30) riskScore = 90;
-        else if (daysUntilEos < 90) riskScore = 75;
-        else if (daysUntilEos < 180) riskScore = 50;
-        else if (daysUntilEos < 365) riskScore = 25;
-
-        const criticalityMap = {
-          'critique': 2.0, 'Critical': 2.0,
-          'Élevée': 1.5, 'High': 1.5,
-          'Moyen': 1.0, 'Medium': 1.0,
-          'Faible': 0.5, 'Low': 0.5
-        };
-
-        const multiplier = criticalityMap[asset.criticality] || 1.0;
-        riskScore = Math.min(100, riskScore * multiplier);
-
-        const isAtRisk = (obsolescenceStatus === 'RED' || obsolescenceStatus === 'ORANGE') 
-          && (asset.criticality === 'Critical' || asset.criticality === 'Critique');
-
-        const requiresReplacement = obsolescenceStatus === 'RED';
-
-        // Insert
-        await db.query(
-          `INSERT INTO assets 
-           (inventory_code, name, type, site, brand, model, serial_number, ip_address,
-            status, criticality, os_version, acquisition_date, production_start_date, 
-            warranty_end_date, end_of_maintenance, end_of_sales, end_of_support, 
-            end_of_software_support, replacement_date, purchase_price, depreciation_duration, budget_code,
-            lifecycle_stage, obsolescence_status, days_until_end_of_support, risk_score,
-            is_at_risk, requires_replacement, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, NOW(), NOW())`,
-          [
-            asset.inventory_code, asset.name, asset.type, asset.site, asset.brand, asset.model,
-            asset.serial_number, asset.ip_address, asset.status, asset.criticality, asset.os_version,
-            asset.acquisition_date, asset.production_start_date, asset.warranty_end_date,
-            asset.end_of_maintenance, asset.end_of_sales, asset.end_of_support, asset.end_of_software_support,
-            replacementDate, asset.purchase_price, asset.depreciation_duration,
-            asset.budget_code, lifecycleStage, obsolescenceStatus, daysUntilEos,
-            Math.round(riskScore), isAtRisk, requiresReplacement
-          ]
-        );
-
-        imported++;
-        console.log(`  ✓ Row ${idx + 1}: ${asset.name} (${obsolescenceStatus}) → ${replacementDate}`);
+        if (result.rows[0] && result.rows[0].inserted) imported++;
+        else updated++;
       } catch (err) {
-        errors.push(`Row ${idx + 1}: ${err.message}`);
+        skipped++;
+        errors.push(`Row ${rowNum}: ${err.message}`);
       }
     }
 
-    const historyResult = await db.query(
-      `INSERT INTO import_history 
-       (filename, original_filename, file_size, total_rows, imported_rows, failed_rows, errors, import_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       RETURNING id`,
-      [
-        `import-${Date.now()}.xlsx`,
-        originalFilename,
-        fileSize,
-        data.length,
-        imported,
-        errors.length,
-        errors.length > 0 ? errors : null
-      ]
-    );
+    await client.query(`
+      INSERT INTO import_history (
+        filename, original_filename, file_size, total_rows,
+        imported_rows, failed_rows, errors, import_date
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7, NOW())
+    `, [
+      `import-${Date.now()}${require('path').extname(originalFilename || '.xlsx')}`,
+      originalFilename || 'unknown',
+      fileSize || 0,
+      rows.length,
+      imported + updated,
+      skipped,
+      errors.length ? errors.slice(0, 100) : null
+    ]);
 
-    console.log(`\n✅ Import complete: ${imported}/${data.length} assets\n`);
-    return { imported, errors, total: data.length };
+    await client.query('COMMIT');
   } catch (err) {
-    console.error('❌ Import failed:', err.message);
-    throw new Error(`Failed to import Excel: ${err.message}`);
+    await client.query('ROLLBACK');
+    throw new Error(`Import failed, no changes were made: ${err.message}`);
+  } finally {
+    client.release();
   }
-}
 
-function normalizeStatus(status) {
-  const map = {
-    'en service': 'Production',
-    'production': 'Production',
-    'test': 'Test',
-    'secours': 'Secours'
-  };
-  return map[status.toLowerCase().trim()] || 'Production';
-}
-
-function normalizeCriticality(crit) {
-  const map = {
-    'critique': 'Critical',
-    'critical': 'Critical',
-    'élevée': 'High',
-    'high': 'High',
-    'moyen': 'Medium',
-    'medium': 'Medium',
-    'faible': 'Low'
-  };
-  return map[crit.toLowerCase().trim()] || 'Medium';
-}
-
-function parseDate(dateStr) {
-  if (!dateStr || dateStr === 'N/A' || dateStr === '') return null;
-  try {
-    if (typeof dateStr === 'number') {
-      if (dateStr > 1900 && dateStr < 2100) return `${dateStr}-01-01`;
-      const date = new Date((dateStr - 25569) * 86400 * 1000);
-      return date.toISOString().split('T')[0];
-    }
-    const parsed = new Date(String(dateStr).trim());
-    return isNaN(parsed.getTime()) ? null : parsed.toISOString().split('T')[0];
-  } catch (err) {
-    return null;
-  }
-}
-
-function getPriceByType(desc) {
-  if (!desc) return 0;
-  const type = desc.toLowerCase();
-  const prices = {
-    'routeur': 15000,
-    'switch': 8000,
-    'firewall': 20000,
-    'access point': 5000,
-    'load balancer': 18000
-  };
-  for (const [key, price] of Object.entries(prices)) {
-    if (type.includes(key)) return price;
-  }
-  return 10000;
+  return { imported, updated, skipped, total: rows.length, errors, warnings };
 }
 
 module.exports = { importExcelAssets };

@@ -1,105 +1,161 @@
 import React, { useState, useEffect } from 'react';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from 'recharts';
 import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
-import '../styles/FinancialSummary.css';
+import {
+  Panel, Kpi, Loading, EmptyState, ErrorState, ChartTooltip,
+  EstimateNotice, CHART_PALETTE, fmtInt
+} from './ui';
 
 export default function FinancialSummary() {
-  const { formatCurrency } = useLanguage();
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { formatCurrency, formatCompact, t } = useLanguage();
+  const [data, setData] = useState(null);
+  const [state, setState] = useState('loading');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/strategic/dashboard/financial-summary`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d) => { if (!cancelled) { setData(d); setState('ready'); } })
+      .catch((e) => { if (!cancelled) { setError(e.message); setState('error'); } });
+    return () => { cancelled = true; };
   }, []);
 
-  const loadData = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/strategic/dashboard/financial-summary`);
-      const result = await response.json();
-      setData(Array.isArray(result) ? result : []);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error:', err);
-      setData([]);
-      setLoading(false);
-    }
-  };
+  if (state === 'loading') return <Loading />;
+  if (state === 'error') return <ErrorState error={error} />;
 
-  if (loading) return <div className="loading">💼 Loading Financial Summary...</div>;
+  const totals = data.totals || {};
+  const byType = (data.by_type || []).map((r) => ({
+    type: r.type,
+    value: Number(r.total_value),
+    needed: Number(r.replacement_budget_needed),
+    count: Number(r.asset_count)
+  }));
+  const byCenter = (data.by_cost_center || []).map((r) => ({
+    center: r.cost_center,
+    value: Number(r.total_value),
+    needed: Number(r.replacement_budget_needed),
+    count: Number(r.asset_count)
+  }));
 
-  const totalValue = data.reduce((sum, item) => sum + parseFloat(item.total_value || 0), 0);
-  const totalReplacement = data.reduce((sum, item) => sum + parseFloat(item.replacement_budget_needed || 0), 0);
-  const totalAssets = data.reduce((sum, item) => sum + parseInt(item.asset_count || 0), 0);
+  if (!byType.length) return <EmptyState title={t('common.noData')} text={t('common.importFirst')} />;
+
+  const totalNeeded = byType.reduce((s, r) => s + r.needed, 0);
+  const portfolio = Number(totals.portfolio_value) || 0;
+  const realPriceRows = Number(totals.rows_with_real_price) || 0;
+  const totalRows = Number(totals.total_rows) || 0;
 
   return (
-    <div className="financial-summary">
-      <h2>💼 Financial Summary</h2>
-      <p className="subtitle">Asset value and replacement budget forecast (in Tunisian Dinars)</p>
-
-      <div className="financial-cards">
-        <div className="fin-card">
-          <div className="fin-icon">💰</div>
-          <div className="fin-label">Total Asset Value</div>
-          <div className="fin-amount">{formatCurrency(totalValue)}</div>
-        </div>
-
-        <div className="fin-card warning">
-          <div className="fin-icon">⚠️</div>
-          <div className="fin-label">Replacement Budget Needed</div>
-          <div className="fin-amount">{formatCurrency(totalReplacement)}</div>
-          <div className="fin-subtitle">For obsolete/at-risk assets</div>
-        </div>
-
-        <div className="fin-card">
-          <div className="fin-icon">📊</div>
-          <div className="fin-label">Total Assets</div>
-          <div className="fin-amount">{totalAssets}</div>
-        </div>
-
-        <div className="fin-card">
-          <div className="fin-icon">📈</div>
-          <div className="fin-label">Replacement %</div>
-          <div className="fin-amount">
-            {totalValue > 0 ? ((totalReplacement / totalValue) * 100).toFixed(1) : 0}%
-          </div>
-        </div>
+    <>
+      <div className="page-head">
+        <h1 className="page-title">Analyse financière</h1>
+        <p className="page-subtitle">
+          Valorisation du parc et besoin de financement par famille et centre de coût
+        </p>
       </div>
 
-      <div className="budget-table-section">
-        <h3>📋 Breakdown by Cost Center & Type</h3>
-        <div className="table-container">
-          <table className="budget-table">
+      <EstimateNotice />
+
+      {realPriceRows === 0 && totalRows > 0 && (
+        <div className="notice warn">
+          <div>
+            <b>Aucun prix d'achat réel dans la base.</b> Les {fmtInt(totalRows)} actifs
+            sont valorisés au coût de remplacement estimé. Pour une analyse
+            d'amortissement, il faudra importer les coûts d'acquisition réels.
+          </div>
+        </div>
+      )}
+
+      <div className="kpi-row">
+        <Kpi tone="navy"   label="Valeur du parc"       value={formatCompact(portfolio)} note="coût de remplacement" />
+        <Kpi tone="red"    label="Besoin immédiat"      value={formatCompact(totalNeeded)} note="actifs à remplacer" />
+        <Kpi tone="accent" label="Part à financer"      value={portfolio ? `${Math.round((totalNeeded / portfolio) * 100)} %` : '—'} note="du parc total" />
+        <Kpi tone="green"  label="Centres de coût"      value={fmtInt(byCenter.length)} />
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <Panel title="Répartition de la valeur par famille">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <ResponsiveContainer width="52%" height={225} minWidth={190}>
+              <PieChart>
+                <Pie
+                  data={byType} dataKey="value" nameKey="type"
+                  cx="50%" cy="50%" outerRadius={86} innerRadius={48}
+                  paddingAngle={2} stroke="#fff" strokeWidth={2}
+                >
+                  {byType.map((entry, i) => (
+                    <Cell key={entry.type} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTooltip formatter={(v) => formatCurrency(v)} />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ flex: 1, minWidth: 170 }}>
+              {byType.map((d, i) => (
+                <div key={d.type} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="legend-swatch" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    {d.type}
+                  </span>
+                  <b className="num">{formatCompact(d.value)}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Besoin de financement par famille" subtitle="Valeur totale contre montant à engager">
+          <ResponsiveContainer width="100%" height={225}>
+            <BarChart data={byType} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="type" tick={{ fontSize: 11.5, fill: 'var(--ink-3)' }} tickLine={false} axisLine={{ stroke: 'var(--line)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--ink-3)' }} tickLine={false} axisLine={false}
+                     tickFormatter={(v) => formatCompact(v)} width={68} />
+              <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltip formatter={(v) => formatCurrency(v)} />} />
+              <Bar dataKey="value"  name="Valeur du parc" fill="#1b3f6e" radius={[3, 3, 0, 0]} maxBarSize={40} />
+              <Bar dataKey="needed" name="À engager"      fill="#c2312d" radius={[3, 3, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      <Panel title="Détail par centre de coût">
+        <div className="table-wrap">
+          <table className="data">
             <thead>
               <tr>
-                <th>Cost Center</th>
-                <th>Asset Type</th>
-                <th>Count</th>
-                <th>Total Value (TND)</th>
-                <th>Avg Value (TND)</th>
-                <th>Replacement Budget (TND)</th>
+                <th>Centre de coût</th>
+                <th className="right">Actifs</th>
+                <th className="right">Valeur du parc</th>
+                <th className="right">Budget à engager</th>
+                <th className="right">Part</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((item, idx) => (
-                <tr key={idx}>
-                  <td><strong>{item.cost_center || 'GENERAL'}</strong></td>
-                  <td>{item.type}</td>
-                  <td className="number">{item.asset_count}</td>
-                  <td className="amount">{formatCurrency(item.total_value || 0)}</td>
-                  <td className="amount">{formatCurrency(item.avg_value || 0)}</td>
-                  <td className="amount warning">
-                    <strong>{formatCurrency(item.replacement_budget_needed || 0)}</strong>
+              {byCenter.map((c) => (
+                <tr key={c.center}>
+                  <td className="strong">{c.center}</td>
+                  <td className="right num">{c.count}</td>
+                  <td className="right num">{formatCurrency(c.value)}</td>
+                  <td className="right num" style={{ color: c.needed > 0 ? 'var(--st-red)' : 'inherit' }}>
+                    {c.needed > 0 ? formatCurrency(c.needed) : '—'}
+                  </td>
+                  <td className="right num">
+                    {c.value ? `${Math.round((c.needed / c.value) * 100)} %` : '—'}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="note">
-        <strong>📌 Note:</strong> All financial values are displayed in Tunisian Dinars (د.ت) at the rate of 1 USD = 3.1 TND
-      </div>
-    </div>
+      </Panel>
+    </>
   );
 }

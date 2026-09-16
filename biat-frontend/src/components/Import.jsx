@@ -1,224 +1,250 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
-import '../styles/Import.css';
+import { useLanguage } from '../contexts/LanguageContext';
+import { Panel, Loading, fmtInt } from './ui';
 
 export default function Import() {
+  const { formatCurrency } = useLanguage();
   const [file, setFile] = useState(null);
+  const [mode, setMode] = useState('replace');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [catalog, setCatalog] = useState(null);
+  const [dragging, setDragging] = useState(false);
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      const ext = selectedFile.name.split('.').pop().toLowerCase();
-      if (['xlsx', 'xls', 'csv'].includes(ext)) {
-        setFile(selectedFile);
-        setError(null);
-      } else {
-        setError('Please select an Excel (.xlsx, .xls) or CSV file');
-        setFile(null);
-      }
-    }
-  };
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/reference/cost-catalog`)
+      .then((r) => r.json())
+      .then(setCatalog)
+      .catch(() => {});
+  }, []);
 
-  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file first');
+  const accept = (f) => {
+    if (!f) return;
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(ext)) {
+      setError('Format non pris en charge. Utilisez un fichier .xlsx, .xls ou .csv');
+      setFile(null);
       return;
     }
+    setError(null);
+    setResult(null);
+    setFile(f);
+  };
 
+  const upload = async () => {
+    if (!file) return;
     setUploading(true);
     setError(null);
     setResult(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      console.log('📤 Uploading file:', file.name);
-      
-      const response = await fetch(`${API_BASE_URL}/import/excel`, {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_BASE_URL}/import/excel?mode=${mode}`, {
         method: 'POST',
-        body: formData
+        body: form
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Upload failed');
-      } else {
-        console.log('✅ Import successful:', data);
-        setResult(data);
-        setFile(null);
-        document.getElementById('fileInput').value = '';
-        
-        // Wait 2 seconds then hard refresh to reload ALL data
-        setTimeout(() => {
-          console.log('🔄 Refreshing page to reload all data...');
-          window.location.reload();
-        }, 2000);
-      }
+      if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
+      setResult(data);
+      setFile(null);
     } catch (err) {
-      console.error('Upload error:', err);
-      setError(`Upload error: ${err.message}`);
+      setError(err.message);
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="import-container">
-      <h2>📥 Import Assets from Excel</h2>
-      <p className="subtitle">Upload your complete asset inventory Excel file to populate the system with automatic obsolescence analysis</p>
-
-      <div className="import-section">
-        <div className="upload-box">
-          <div className="upload-icon">📄</div>
-          <h3>Select Excel File</h3>
-          <p>Supported formats: .xlsx, .xls, .csv</p>
-          
-          <input
-            id="fileInput"
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleFileChange}
-            className="file-input"
-          />
-          
-          {file && (
-            <div className="file-selected">
-              <span>✓ {file.name}</span>
-              <span className="file-size">({(file.size / 1024).toFixed(2)} KB)</span>
-            </div>
-          )}
-        </div>
-
-        <button 
-          onClick={handleUpload}
-          disabled={!file || uploading}
-          className="upload-button"
-        >
-          {uploading ? '⏳ Uploading & Analyzing...' : '🚀 Upload & Import'}
-        </button>
+    <>
+      <div className="page-head">
+        <h1 className="page-title">Import de l'inventaire</h1>
+        <p className="page-subtitle">
+          Chargement des extractions Excel ou CSV du parc IT
+        </p>
       </div>
 
-      {error && (
-        <div className="alert error">
-          <span>❌ Error</span>
-          <p>{error}</p>
+      <Panel title="Fichier source" subtitle="Formats acceptés : .xlsx, .xls, .csv — 10 Mo maximum">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); accept(e.dataTransfer.files[0]); }}
+          style={{
+            border: `1.5px dashed ${dragging ? 'var(--accent)' : 'var(--line-strong)'}`,
+            background: dragging ? 'var(--accent-soft)' : 'var(--surface-2)',
+            borderRadius: 'var(--r-md)',
+            padding: '34px 20px',
+            textAlign: 'center',
+            transition: 'background .15s ease, border-color .15s ease'
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>
+            {file ? file.name : 'Déposez le fichier ici'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 5 }}>
+            {file
+              ? `${(file.size / 1024).toFixed(0)} Ko — prêt à importer`
+              : 'ou sélectionnez-le depuis votre ordinateur'}
+          </div>
+          <label className="btn ghost" style={{ display: 'inline-block', marginTop: 14 }}>
+            Parcourir
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              style={{ display: 'none' }}
+              onChange={(e) => accept(e.target.files[0])}
+            />
+          </label>
         </div>
-      )}
 
-      {result && (
-        <div className="alert success">
-          <span>✅ Success!</span>
-          <div className="result-details">
-            <p><strong>Imported:</strong> {result.imported} / {result.total} assets</p>
-            {result.errors && result.errors.length > 0 && (
-              <div className="errors">
-                <strong>Errors ({result.errors.length}):</strong>
-                <ul>
-                  {result.errors.slice(0, 5).map((err, idx) => (
-                    <li key={idx}>{err}</li>
-                  ))}
-                  {result.errors.length > 5 && <li>... and {result.errors.length - 5} more</li>}
+        <div className="field-row" style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 12.5, color: 'var(--ink-2)', fontWeight: 560 }}>Mode d'import</label>
+          <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="replace">Remplacer l'inventaire existant</option>
+            <option value="merge">Compléter l'inventaire (ajout et mise à jour)</option>
+          </select>
+          <button className="btn primary" onClick={upload} disabled={!file || uploading}>
+            {uploading ? 'Import en cours…' : 'Importer'}
+          </button>
+        </div>
+
+        <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 10, lineHeight: 1.5 }}>
+          {mode === 'replace'
+            ? "L'inventaire actuel est supprimé avant le chargement. À utiliser pour une extraction complète du parc."
+            : "Les actifs existants sont mis à jour et les nouveaux ajoutés, en se basant sur le numéro d'asset ou de série. À utiliser pour consolider plusieurs fichiers (réseau, serveurs, licences)."}
+        </p>
+
+        {uploading && <Loading text="Analyse du fichier et chargement en base…" />}
+
+        {error && (
+          <div className="notice alert" style={{ marginTop: 16, marginBottom: 0 }}>
+            <div><b>Import impossible.</b> {error}</div>
+          </div>
+        )}
+
+        {result && (
+          <div style={{ marginTop: 18 }}>
+            <div className="notice info" style={{ marginBottom: 14 }}>
+              <div>
+                <b>Import terminé.</b> {result.message}
+              </div>
+            </div>
+            <div className="kpi-row" style={{ marginBottom: 0 }}>
+              <div className="kpi green">
+                <div className="kpi-label">Ajoutés</div>
+                <div className="kpi-value">{fmtInt(result.imported)}</div>
+              </div>
+              <div className="kpi accent">
+                <div className="kpi-label">Mis à jour</div>
+                <div className="kpi-value">{fmtInt(result.updated)}</div>
+              </div>
+              <div className={result.skipped ? 'kpi red' : 'kpi'}>
+                <div className="kpi-label">Ignorés</div>
+                <div className="kpi-value">{fmtInt(result.skipped)}</div>
+              </div>
+              <div className="kpi navy">
+                <div className="kpi-label">Lignes lues</div>
+                <div className="kpi-value">{fmtInt(result.total)}</div>
+              </div>
+            </div>
+
+            {result.warnings && result.warnings.length > 0 && (
+              <div className="notice warn" style={{ marginTop: 14, marginBottom: 0, display: 'block' }}>
+                <b>{result.warnings.length} avertissement(s)</b>
+                <ul style={{ margin: '7px 0 0 18px' }}>
+                  {result.warnings.slice(0, 8).map((w, i) => <li key={i}>{w}</li>)}
+                  {result.warnings.length > 8 && <li>… et {result.warnings.length - 8} autre(s)</li>}
                 </ul>
               </div>
             )}
-            <p className="refresh-message">📊 Page will refresh to show imported data with automatic obsolescence analysis...</p>
+
+            {result.errors && result.errors.length > 0 && (
+              <div className="notice alert" style={{ marginTop: 14, marginBottom: 0, display: 'block' }}>
+                <b>{result.errors.length} ligne(s) rejetée(s)</b>
+                <ul style={{ margin: '7px 0 0 18px' }}>
+                  {result.errors.slice(0, 8).map((e, i) => <li key={i}>{e}</li>)}
+                  {result.errors.length > 8 && <li>… et {result.errors.length - 8} autre(s)</li>}
+                </ul>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Panel>
 
-      <div className="template-section">
-        <h3>📋 REQUIRED Excel Columns (Complete List)</h3>
-        <p><strong>⚠️ Important:</strong> Your Excel file MUST have ALL these columns. Column order doesn't matter, but names must match exactly (French or English).</p>
-        
-        <div className="columns-grid">
-          <div className="column-item required">
-            <strong>📌 General Information</strong>
-            <ul>
-              <li>Nom / Equipment Name</li>
-              <li>Type d'actif / Asset Type</li>
-              <li>Site / Site Location</li>
-              <li>Marque->Nom / Brand</li>
-              <li>Modèle->Nom / Model</li>
-              <li>Numéro de série / Serial Number</li>
-            </ul>
-          </div>
+      <div style={{ height: 16 }} />
 
-          <div className="column-item required">
-            <strong>🔧 Technical Information</strong>
-            <ul>
-              <li>IP / IP Address</li>
-              <li>Statut / Status</li>
-              <li>Criticité / Criticality</li>
-              <li>Description / Type</li>
-            </ul>
-          </div>
-
-          <div className="column-item required">
-            <strong>📅 Lifecycle Dates (CRITICAL!)</strong>
-            <ul>
-              <li>end-of-support ⭐</li>
-              <li>end-of-maintenance</li>
-              <li>end-of-sales</li>
-              <li>Date de mise en production</li>
-            </ul>
-          </div>
-
-          <div className="column-item required">
-            <strong>💰 Financial</strong>
-            <ul>
-              <li>Date d'achat / Acquisition Date</li>
-              <li>Organisation->Nom organisation</li>
-              <li>Budget Code</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="status-info">
-          <h3>📋 Status Values</h3>
-          <p>Use one of these in the Status column:</p>
-          <div className="status-values">
-            <span>Production / en service</span>
-            <span>Secours</span>
-            <span>Test</span>
-            <span>Hors service</span>
-          </div>
-        </div>
-
-        <div className="criticality-info">
-          <h3>🎯 Criticality Values</h3>
-          <p>Use one of these in the Criticality column:</p>
-          <div className="criticality-values">
-            <span>Critical / Critique</span>
-            <span>High / Élevée</span>
-            <span>Medium / Moyen</span>
-            <span>Low / Faible</span>
-          </div>
-        </div>
-
-        <div className="dates-info">
-          <h3>📆 Date Format</h3>
-          <p>All dates must be: <strong>YYYY-MM-DD</strong></p>
-          <p>Example: 2026-10-13</p>
-        </div>
-
-        <div className="obscolescence-info">
-          <h3>🔍 Automatic Obsolescence Calculation</h3>
-          <p>Based on "End of Support" date:</p>
-          <table className="obscolescence-table">
+      <Panel
+        title="Colonnes reconnues"
+        subtitle="Le nom des colonnes est détecté automatiquement ; les variantes ci-dessous sont acceptées"
+      >
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr><th>Donnée</th><th>Colonnes acceptées</th></tr>
+            </thead>
             <tbody>
-              <tr><td>🟢 GREEN</td><td>Support valid (more than 12 months)</td></tr>
-              <tr><td>🟡 YELLOW</td><td>Support ends in 6-12 months</td></tr>
-              <tr><td>🟠 ORANGE</td><td>Support ends in less than 6 months</td></tr>
-              <tr><td>🔴 RED</td><td>Support has already expired</td></tr>
+              <tr><td className="strong">Nom</td><td className="mono">Nom · Nom de l'équipement · Name</td></tr>
+              <tr><td className="strong">Type</td><td className="mono">Description · Sous-classe de CI · Type</td></tr>
+              <tr><td className="strong">Site</td><td className="mono">Site-&gt;Nom · Site · Site d'implantation</td></tr>
+              <tr><td className="strong">Marque</td><td className="mono">Marque-&gt;Nom · Constructeur · Brand</td></tr>
+              <tr><td className="strong">Modèle</td><td className="mono">Modèle-&gt;Nom · Modèle exact · Model</td></tr>
+              <tr><td className="strong">Criticité</td><td className="mono">Criticité · Niveau de criticité</td></tr>
+              <tr><td className="strong">Statut</td><td className="mono">Statut · Statut actuel · Status</td></tr>
+              <tr><td className="strong">Fin de support</td><td className="mono">end-of-support · Fin de support · End of Support</td></tr>
+              <tr><td className="strong">Fin de maintenance</td><td className="mono">end-of-maintenance · Date de fin de maintenance</td></tr>
+              <tr><td className="strong">Fin de commercialisation</td><td className="mono">end-of-sales · End of Sale</td></tr>
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+        <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 12, lineHeight: 1.55 }}>
+          La colonne <span className="mono">end-of-support</span> apparaît deux fois dans
+          l'extraction réseau BIAT, une fois en texte et une fois en date. Les deux sont
+          lues et la date la plus tardive est retenue. Le type d'équipement est déterminé
+          à partir de la colonne <span className="mono">Description</span> et non du nom,
+          car tous les équipements de l'extraction sont nommés « Routeur AGENCE XX »
+          y compris les switches.
+        </p>
+      </Panel>
+
+      <div style={{ height: 16 }} />
+
+      <Panel
+        title="Hypothèses de coût"
+        subtitle="Base de valorisation utilisée tant que les coûts d'acquisition réels ne sont pas fournis"
+      >
+        {!catalog ? <Loading text="Chargement du catalogue…" /> : (
+          <>
+            <div className="notice warn">
+              <div>
+                Ces montants sont des <b>estimations de planification</b>, exprimées en
+                dinar tunisien. Ils servent à ordonner les priorités budgétaires, pas à
+                établir un engagement financier. Dès que BIAT fournit les coûts réels,
+                ceux-ci sont utilisés en priorité.
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr><th>Famille d'équipement</th><th className="right">Coût de remplacement estimé</th></tr>
+                </thead>
+                <tbody>
+                  {catalog.entries.map((e) => (
+                    <tr key={e.label}>
+                      <td className="strong">{e.label}</td>
+                      <td className="right num">{formatCurrency(e.cost)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td>Autre équipement (par défaut)</td>
+                    <td className="right num">{formatCurrency(catalog.default_cost)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Panel>
+    </>
   );
 }

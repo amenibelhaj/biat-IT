@@ -1,361 +1,222 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
-import '../styles/AssetInventory.css';
+import {
+  Panel, StatusBadge, RiskPill, Loading, EmptyState, ErrorState, fmtDate, fmtInt
+} from './ui';
+
+const EMPTY_FILTERS = { site: '', type: '', status: '', criticality: '', obsolescence: '', search: '' };
 
 export default function AssetInventory() {
-  const { formatCurrency } = useLanguage();
+  const { formatCurrency, t } = useLanguage();
   const [assets, setAssets] = useState([]);
-  const [filteredAssets, setFilteredAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [options, setOptions] = useState({ sites: [], types: [], statuses: [], criticalities: [] });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [selected, setSelected] = useState(null);
+  const [state, setState] = useState('loading');
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({
-    site: '',
-    status: '',
-    criticality: '',
-    obsolescence: ''
-  });
 
   useEffect(() => {
-    loadAssets();
+    fetch(`${API_BASE_URL}/assets/filters`)
+      .then((r) => r.json())
+      .then((d) => setOptions({
+        sites: d.sites || [], types: d.types || [],
+        statuses: d.statuses || [], criticalities: d.criticalities || []
+      }))
+      .catch(() => { /* filters are a convenience; failure is not fatal */ });
   }, []);
 
+  const load = useCallback(() => {
+    const qs = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => { if (v) qs.append(k, v); });
+    setState('loading');
+    fetch(`${API_BASE_URL}/assets?${qs.toString()}`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d) => { setAssets(Array.isArray(d) ? d : []); setState('ready'); })
+      .catch((e) => { setError(e.message); setState('error'); });
+  }, [filters]);
+
   useEffect(() => {
-    applyFilters();
-  }, [filters, assets]);
+    const timer = setTimeout(load, filters.search ? 300 : 0); // debounce typing
+    return () => clearTimeout(timer);
+  }, [load, filters.search]);
 
-  const loadAssets = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/assets`);
-      const data = await response.json();
-      
-      console.log('Assets data:', data);
-      
-      // Ensure data is array
-      const assetsArray = Array.isArray(data) ? data : (data && typeof data === 'object' ? [data] : []);
-      
-      setAssets(assetsArray);
-      setFilteredAssets(assetsArray);
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to load assets:', err);
-      setError(err.message);
-      setAssets([]);
-      setFilteredAssets([]);
-      setLoading(false);
-    }
+  const exportCsv = () => {
+    const cols = ['inventory_code', 'name', 'type', 'site', 'brand', 'model', 'ip_address',
+                  'status', 'criticality', 'end_of_support', 'status_live', 'risk_score_live',
+                  'estimated_replacement_cost'];
+    const escape = (v) => `"${String(v === null || v === undefined ? '' : v).replace(/"/g, '""')}"`;
+    const csv = [cols.join(','), ...assets.map((a) => cols.map((c) => escape(a[c])).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventaire-biat-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const applyFilters = () => {
-    let filtered = assets;
-
-    if (filters.site) {
-      filtered = filtered.filter(a => a.site === filters.site);
-    }
-    if (filters.status) {
-      filtered = filtered.filter(a => a.status === filters.status);
-    }
-    if (filters.criticality) {
-      filtered = filtered.filter(a => a.criticality === filters.criticality);
-    }
-    if (filters.obsolescence) {
-      filtered = filtered.filter(a => a.obsolescence_status === filters.obsolescence);
-    }
-
-    setFilteredAssets(filtered);
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      'Production': '#26de81',
-      'en service': '#26de81',
-      'Test': '#ffd93d',
-      'Secours': '#ffa502',
-      'Hors service': '#ff4757'
-    };
-    return colors[status] || '#ccc';
-  };
-
-  const getObsolescenceColor = (status) => {
-    const colors = {
-      'GREEN': '#26de81',
-      'YELLOW': '#ffd93d',
-      'ORANGE': '#ffa502',
-      'RED': '#ff4757'
-    };
-    return colors[status || 'GREEN'] || '#ccc';
-  };
-
-  const getObsolescenceIcon = (status) => {
-    const icons = {
-      'GREEN': '🟢',
-      'YELLOW': '🟡',
-      'ORANGE': '🟠',
-      'RED': '🔴'
-    };
-    return icons[status || 'GREEN'] || '⚪';
-  };
-
-  if (loading) return <div className="loading">📦 Loading assets...</div>;
-
-  if (error) {
-    return (
-      <div className="error">
-        ❌ Error: {error}
-        <button onClick={loadAssets}>Try Again</button>
-      </div>
-    );
-  }
-
-  const sites = [...new Set(assets.map(a => a.site).filter(Boolean))];
-  const statuses = [...new Set(assets.map(a => a.status).filter(Boolean))];
-  const criticalities = [...new Set(assets.map(a => a.criticality).filter(Boolean))];
-  const obsolescences = ['RED', 'ORANGE', 'YELLOW', 'GREEN'];
+  if (state === 'error') return <ErrorState error={error} />;
 
   return (
-    <div className="asset-inventory">
-      <h2>📦 IT Asset Inventory</h2>
-      <p className="subtitle">Complete list of all IT assets with lifecycle and obsolescence status</p>
-
-      {/* FILTERS */}
-      <div className="filters-section">
-        <div className="filter-group">
-          <label>Site:</label>
-          <select 
-            value={filters.site} 
-            onChange={(e) => setFilters({...filters, site: e.target.value})}
-          >
-            <option value="">All Sites</option>
-            {sites.map(site => <option key={site} value={site}>{site}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <label>Status:</label>
-          <select 
-            value={filters.status} 
-            onChange={(e) => setFilters({...filters, status: e.target.value})}
-          >
-            <option value="">All Status</option>
-            {statuses.map(status => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <label>Criticality:</label>
-          <select 
-            value={filters.criticality} 
-            onChange={(e) => setFilters({...filters, criticality: e.target.value})}
-          >
-            <option value="">All Criticalities</option>
-            {criticalities.map(crit => <option key={crit} value={crit}>{crit}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <label>Obsolescence:</label>
-          <select 
-            value={filters.obsolescence} 
-            onChange={(e) => setFilters({...filters, obsolescence: e.target.value})}
-          >
-            <option value="">All Levels</option>
-            {obsolescences.map(obs => <option key={obs} value={obs}>{getObsolescenceIcon(obs)} {obs}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <button onClick={() => setFilters({site: '', status: '', criticality: '', obsolescence: ''})}>
-            Clear Filters
-          </button>
-        </div>
+    <>
+      <div className="page-head">
+        <h1 className="page-title">Inventaire des actifs</h1>
+        <p className="page-subtitle">
+          {state === 'ready' ? `${fmtInt(assets.length)} actif(s) affiché(s)` : t('common.loading')}
+        </p>
       </div>
 
-      {/* SUMMARY */}
-      <div className="summary">
-        <span>Total Assets: <strong>{filteredAssets.length}</strong></span>
-        <span>🔴 RED: <strong>{filteredAssets.filter(a => a.obsolescence_status === 'RED').length}</strong></span>
-        <span>🟠 ORANGE: <strong>{filteredAssets.filter(a => a.obsolescence_status === 'ORANGE').length}</strong></span>
-        <span>🟡 YELLOW: <strong>{filteredAssets.filter(a => a.obsolescence_status === 'YELLOW').length}</strong></span>
-        <span>🟢 GREEN: <strong>{filteredAssets.filter(a => a.obsolescence_status === 'GREEN').length}</strong></span>
-      </div>
+      <Panel>
+        <div className="field-row">
+          <input
+            className="input grow"
+            placeholder="Rechercher un nom, code, IP ou modèle…"
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          />
+          <select className="input" value={filters.obsolescence}
+                  onChange={(e) => setFilters({ ...filters, obsolescence: e.target.value })}>
+            <option value="">Tous les statuts d'obsolescence</option>
+            <option value="RED">Support expiré</option>
+            <option value="ORANGE">Fin de support &lt; 6 mois</option>
+            <option value="YELLOW">Fin de support &lt; 12 mois</option>
+            <option value="GREEN">Support valide</option>
+            <option value="UNKNOWN">Date inconnue</option>
+          </select>
+          <select className="input" value={filters.type}
+                  onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
+            <option value="">Toutes les familles</option>
+            {options.types.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select className="input" value={filters.site}
+                  onChange={(e) => setFilters({ ...filters, site: e.target.value })}>
+            <option value="">Tous les sites</option>
+            {options.sites.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select className="input" value={filters.criticality}
+                  onChange={(e) => setFilters({ ...filters, criticality: e.target.value })}>
+            <option value="">Toutes criticités</option>
+            {options.criticalities.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)}>Réinitialiser</button>
+          <button className="btn primary" onClick={exportCsv} disabled={!assets.length}>Exporter CSV</button>
+        </div>
+      </Panel>
 
-      {/* TABLE */}
-      <div className="table-container">
-        <table className="assets-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Equipment Name</th>
-              <th>Type</th>
-              <th>Site</th>
-              <th>Brand / Model</th>
-              <th>Serial #</th>
-              <th>IP Address</th>
-              <th>Status</th>
-              <th>Criticality</th>
-              <th>End of Support</th>
-              <th>Obsolescence</th>
-              <th>Lifecycle</th>
-              <th>Risk Score</th>
-              <th>Price</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAssets.map(asset => {
-              const obsStatus = asset.obsolescence_status || 'GREEN';
-              return (
-                <tr key={asset.id} className={`risk-${obsStatus.toLowerCase()}`}>
-                  <td className="code">{asset.inventory_code || 'N/A'}</td>
-                  <td className="name"><strong>{asset.name || 'Unknown'}</strong></td>
-                  <td>{asset.type || 'N/A'}</td>
-                  <td>{asset.site || 'N/A'}</td>
-                  <td>{(asset.brand || 'N/A')} {(asset.model || '')}</td>
-                  <td className="serial">{asset.serial_number || 'N/A'}</td>
-                  <td className="ip">{asset.ip_address || 'N/A'}</td>
-                  <td>
-                    <span className="status-badge" style={{background: getStatusColor(asset.status)}}>
-                      {asset.status || 'N/A'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="criticality-badge">
-                      {asset.criticality === 'Critical' || asset.criticality === 'Critique' || asset.criticality === 'critique' ? '🔴' : ''}
-                      {asset.criticality === 'High' || asset.criticality === 'Élevée' ? '🟠' : ''}
-                      {asset.criticality === 'Medium' || asset.criticality === 'Moyen' ? '🟡' : ''}
-                      {asset.criticality === 'Low' || asset.criticality === 'Faible' ? '🟢' : ''}
-                      {asset.criticality || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="date">
-                    {asset.end_of_support ? new Date(asset.end_of_support).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="obsolescence">
-                    <span 
-                      className="obs-badge"
-                      style={{
-                        background: getObsolescenceColor(obsStatus),
-                        color: obsStatus === 'YELLOW' ? '#333' : 'white'
-                      }}
-                    >
-                      {getObsolescenceIcon(obsStatus)} {obsStatus}
-                    </span>
-                  </td>
-                  <td className="lifecycle">
-                    {asset.lifecycle_stage || 'N/A'}
-                  </td>
-                  <td className="risk">
-                    <span className={`risk-${Math.round((asset.risk_score || 0) / 25)}`}>
-                      {Math.round(asset.risk_score || 0)}
-                    </span>
-                  </td>
-                  <td className="price">{formatCurrency(asset.purchase_price || 0)}</td>
-                  <td>
-                    <button className="details-btn" onClick={() => setSelectedAsset(asset)}>
-                      View
-                    </button>
-                  </td>
+      <div style={{ height: 16 }} />
+
+      <Panel tight>
+        {state === 'loading' ? <Loading /> : !assets.length ? (
+          <EmptyState
+            title="Aucun actif ne correspond"
+            text="Modifiez les filtres, ou importez un fichier d'inventaire depuis l'onglet Import."
+          />
+        ) : (
+          <div className="table-wrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Équipement</th>
+                  <th>Type</th>
+                  <th>Site</th>
+                  <th>Marque / Modèle</th>
+                  <th>IP</th>
+                  <th>Criticité</th>
+                  <th>Obsolescence</th>
+                  <th>Fin de support</th>
+                  <th className="right">Risque</th>
+                  <th className="right">Coût est.</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {assets.map((a) => (
+                  <tr key={a.id} onClick={() => setSelected(a)} style={{ cursor: 'pointer' }}>
+                    <td className="strong">{a.name}</td>
+                    <td>{a.type}</td>
+                    <td>{a.site}</td>
+                    <td>{[a.brand, a.model].filter(Boolean).join(' ') || '—'}</td>
+                    <td className="mono">{a.ip_address || '—'}</td>
+                    <td><span className={`chip ${String(a.criticality).toLowerCase()}`}>{a.criticality}</span></td>
+                    <td><StatusBadge status={a.status_live} label={t(`status.${a.status_live}`)} /></td>
+                    <td className="mono">{fmtDate(a.end_of_support)}</td>
+                    <td className="right"><RiskPill score={a.risk_score_live} /></td>
+                    <td className="right num">{formatCurrency(a.estimated_replacement_cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
 
-      {/* ASSET DETAIL MODAL */}
-      {selectedAsset && (
-        <div className="modal-overlay" onClick={() => setSelectedAsset(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setSelectedAsset(null)}>✕</button>
-            
-            <h2>{selectedAsset.name || 'Unknown'}</h2>
-            <p className="code">Code: {selectedAsset.inventory_code || 'N/A'}</p>
-
-            <div className="detail-section">
-              <h3>📌 General Information</h3>
-              <div className="detail-grid">
-                <div><strong>Type:</strong> {selectedAsset.type || 'N/A'}</div>
-                <div><strong>Brand:</strong> {selectedAsset.brand || 'N/A'}</div>
-                <div><strong>Model:</strong> {selectedAsset.model || 'N/A'}</div>
-                <div><strong>Serial Number:</strong> {selectedAsset.serial_number || 'N/A'}</div>
-                <div><strong>Site:</strong> {selectedAsset.site || 'N/A'}</div>
-                <div><strong>IP Address:</strong> {selectedAsset.ip_address || 'N/A'}</div>
+      {selected && (
+        <div
+          onClick={() => setSelected(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(11,37,69,.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, zIndex: 50
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="panel"
+            style={{ maxWidth: 680, width: '100%', maxHeight: '86vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}
+          >
+            <div className="panel-head">
+              <div>
+                <div className="section-title">{selected.name}</div>
+                <div className="section-sub">{selected.inventory_code}</div>
               </div>
+              <button className="btn ghost" onClick={() => setSelected(null)}>Fermer</button>
             </div>
-
-            <div className="detail-section">
-              <h3>🔧 Technical Information</h3>
-              <div className="detail-grid">
-                <div><strong>Status:</strong> {selectedAsset.status || 'N/A'}</div>
-                <div><strong>Criticality:</strong> {selectedAsset.criticality || 'N/A'}</div>
-                <div><strong>OS Version:</strong> {selectedAsset.os_version || 'N/A'}</div>
+            <div className="panel-body">
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                <StatusBadge status={selected.status_live} label={t(`status.${selected.status_live}`)} />
+                <span className={`chip ${String(selected.criticality).toLowerCase()}`}>{selected.criticality}</span>
+                <RiskPill score={selected.risk_score_live} />
               </div>
-            </div>
 
-            <div className="detail-section">
-              <h3>💰 Financial Information</h3>
-              <div className="detail-grid">
-                <div><strong>Purchase Price:</strong> {formatCurrency(selectedAsset.purchase_price || 0)}</div>
-                <div><strong>Acquisition Date:</strong> {selectedAsset.acquisition_date ? new Date(selectedAsset.acquisition_date).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>Depreciation Duration:</strong> {selectedAsset.depreciation_duration || 'N/A'} months</div>
-                <div><strong>Budget Code:</strong> {selectedAsset.budget_code || 'N/A'}</div>
-              </div>
-            </div>
-
-            <div className="detail-section">
-              <h3>📅 Lifecycle & Obsolescence</h3>
-              <div className="detail-grid">
-                <div><strong>Production Start:</strong> {selectedAsset.production_start_date ? new Date(selectedAsset.production_start_date).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>Warranty End:</strong> {selectedAsset.warranty_end_date ? new Date(selectedAsset.warranty_end_date).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>End of Sales:</strong> {selectedAsset.end_of_sales ? new Date(selectedAsset.end_of_sales).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>End of Maintenance:</strong> {selectedAsset.end_of_maintenance ? new Date(selectedAsset.end_of_maintenance).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>End of Support:</strong> {selectedAsset.end_of_support ? new Date(selectedAsset.end_of_support).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>End of Software Support:</strong> {selectedAsset.end_of_software_support ? new Date(selectedAsset.end_of_software_support).toLocaleDateString() : 'N/A'}</div>
-                <div><strong>Planned Replacement:</strong> {selectedAsset.replacement_date ? new Date(selectedAsset.replacement_date).toLocaleDateString() : 'N/A'}</div>
-              </div>
-            </div>
-
-            <div className="detail-section alert">
-              <h3>🔍 Analysis</h3>
-              <div className="analysis">
-                <div className="analysis-item">
-                  <span>Obsolescence Status:</span>
-                  <span 
-                    className="badge"
-                    style={{
-                      background: getObsolescenceColor(selectedAsset.obsolescence_status),
-                      color: (selectedAsset.obsolescence_status || 'GREEN') === 'YELLOW' ? '#333' : 'white'
-                    }}
-                  >
-                    {getObsolescenceIcon(selectedAsset.obsolescence_status)} {selectedAsset.obsolescence_status || 'GREEN'}
-                  </span>
-                </div>
-                <div className="analysis-item">
-                  <span>Lifecycle Stage:</span>
-                  <span className="badge">{selectedAsset.lifecycle_stage || 'N/A'}</span>
-                </div>
-                <div className="analysis-item">
-                  <span>Risk Score:</span>
-                  <span className="badge">{Math.round(selectedAsset.risk_score || 0)}/100</span>
-                </div>
-                <div className="analysis-item">
-                  <span>Days Until End of Support:</span>
-                  <span className="badge">{selectedAsset.days_until_end_of_support || 'N/A'}</span>
-                </div>
-                <div className="analysis-item">
-                  <span>At Risk:</span>
-                  <span className="badge">{selectedAsset.is_at_risk ? '⚠️ YES' : '✓ No'}</span>
-                </div>
-                <div className="analysis-item">
-                  <span>Requires Replacement:</span>
-                  <span className="badge">{selectedAsset.requires_replacement ? '🔄 YES' : '✓ No'}</span>
-                </div>
-              </div>
+              <table className="data">
+                <tbody>
+                  <tr><td>Type</td><td className="strong">{selected.type}</td></tr>
+                  <tr><td>Site</td><td className="strong">{selected.site}</td></tr>
+                  <tr><td>Marque / Modèle</td><td className="strong">{[selected.brand, selected.model].filter(Boolean).join(' ') || '—'}</td></tr>
+                  <tr><td>Numéro de série</td><td className="strong mono">{selected.serial_number || '—'}</td></tr>
+                  <tr><td>Adresse IP</td><td className="strong mono">{selected.ip_address || '—'}</td></tr>
+                  <tr><td>Statut d'exploitation</td><td className="strong">{selected.status}</td></tr>
+                  <tr><td>Version OS / IOS</td><td className="strong">{selected.os_version || '—'}</td></tr>
+                  <tr><td>Mise en production</td><td className="strong">{fmtDate(selected.production_start_date)}</td></tr>
+                  <tr><td>Fin de garantie</td><td className="strong">{fmtDate(selected.warranty_end_date)}</td></tr>
+                  <tr><td>Fin de commercialisation</td><td className="strong">{fmtDate(selected.end_of_sales)}</td></tr>
+                  <tr><td>Fin de maintenance</td><td className="strong">{fmtDate(selected.end_of_maintenance)}</td></tr>
+                  <tr><td>Fin de support constructeur</td><td className="strong">{fmtDate(selected.end_of_support)}</td></tr>
+                  <tr><td>Étape du cycle de vie</td><td className="strong">{selected.lifecycle_stage_live}</td></tr>
+                  <tr>
+                    <td>Score de risque</td>
+                    <td className="strong">
+                      {Math.round(Number(selected.risk_score_live))} / 100
+                      <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
+                        {' '}(échéance {selected.risk_time_component} + criticité {selected.risk_criticality_component})
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Coût de remplacement</td>
+                    <td className="strong">
+                      {formatCurrency(selected.estimated_replacement_cost)}
+                      {selected.cost_is_estimated && (
+                        <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> (estimé)</span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

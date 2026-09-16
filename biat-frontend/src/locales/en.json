@@ -1,1 +1,31 @@
-{"nav":{"import":"📥 Import","inventory":"📦 Inventory","executive":"📊 Executive","risk":"🔥 Risk Map","budget":"💰 Budget","roadmap":"📅 Roadmap","lifecycle":"🔄 Lifecycle","financial":"💼 Financial"},"executive":{"title":"Executive Summary","total":"Total Assets","red":"RED","orange":"ORANGE","yellow":"YELLOW","green":"GREEN","atRisk":"At Risk","replacement":"Needs Replacement","value":"Total Value"}}
+{
+  "nav": {
+    "import": "Import",
+    "history": "History",
+    "inventory": "Inventory",
+    "executive": "Executive",
+    "risk": "Risk map",
+    "budget": "Budget",
+    "roadmap": "Replacement plan",
+    "lifecycle": "Lifecycle",
+    "financial": "Financial"
+  },
+  "app": {
+    "title": "IT Asset Lifecycle Management",
+    "subtitle": "Obsolescence tracking and renewal planning — IT Department"
+  },
+  "status": {
+    "RED": "Support expired",
+    "ORANGE": "End of support < 6 months",
+    "YELLOW": "End of support < 12 months",
+    "GREEN": "Support valid",
+    "UNKNOWN": "Date unknown"
+  },
+  "common": {
+    "total": "Total",
+    "assets": "assets",
+    "loading": "Loading…",
+    "noData": "No data",
+    "importFirst": "Import an inventory file to see this analysis."
+  }
+}

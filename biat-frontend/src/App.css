@@ -1,155 +1,117 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; color: #333; }
-.App { display: flex; flex-direction: column; height: 100vh; }
+/* Application shell: fixed sidebar, scrolling content area. */
 
-.header {
-  background: linear-gradient(135deg, #003366 0%, #004080 100%);
-  color: white;
-  padding: 25px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.header h1 { font-size: 28px; margin-bottom: 5px; font-weight: 700; }
-.subtitle { font-size: 13px; opacity: 0.9; margin-bottom: 15px; }
-
-.nav {
+.shell {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.nav button {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 11px 18px;
-  border-radius: 6px;
-  cursor: pointer;
+/* ---------------- Sidebar ---------------- */
+.sidebar {
+  width: 236px;
+  flex-shrink: 0;
+  background: var(--navy-900);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* The logo is a transparent PNG in BIAT's own colours (dark blue on
+   nothing). Those colours cannot be read against the navy sidebar, and
+   recolouring a bank's logo is not acceptable — so the header is a clean
+   white band across the full width of the sidebar. */
+.brand {
+  background: #fff;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+.brand img {
+  width: 100%;
+  max-width: 172px;
+  height: auto;
+  display: block;
+}
+
+.brand-caption {
+  padding: 11px 16px 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+.brand-title {
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 620;
+  line-height: 1.3;
+}
+.brand-sub {
+  color: rgba(255, 255, 255, .5);
+  font-size: 10.5px;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.side-nav { flex: 1; padding: 14px 10px; }
+.nav-group + .nav-group { margin-top: 18px; }
+.nav-group-label {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.38);
+  padding: 0 10px 7px;
+}
+.nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.76);
+  font-family: var(--font);
   font-size: 13px;
+  font-weight: 520;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.nav-item:hover { background: rgba(255,255,255,.07); color: #fff; }
+.nav-item.active {
+  background: var(--accent);
+  color: #fff;
   font-weight: 600;
-  transition: all 0.2s ease;
 }
 
-.nav button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.side-foot {
+  padding: 14px 12px 18px;
+  border-top: 1px solid rgba(255,255,255,.09);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-
-.nav button.active {
-  background: white;
-  color: #003366;
-  border-color: white;
+.side-foot .input {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.16);
+  color: #fff;
+  min-width: 0;
+  width: 100%;
+  font-size: 12.5px;
 }
+.side-foot .input option { color: var(--ink); }
 
-.main-content {
+/* ---------------- Content ---------------- */
+.content {
   flex: 1;
   overflow-y: auto;
-  max-width: 1600px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 30px;
+  padding: 26px 30px 44px;
 }
 
-h2 { font-size: 28px; color: #003366; margin-bottom: 10px; font-weight: 700; }
-.subtitle { font-size: 14px; color: #666; margin-bottom: 25px; }
-h3 { font-size: 18px; color: #003366; margin-bottom: 15px; font-weight: 600; }
-
-.section {
-  background: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 25px;
-}
-
-.loading {
-  text-align: center;
-  padding: 60px 20px;
-  font-size: 18px;
-  color: #666;
-  background: white;
-  border-radius: 8px;
-}
-
-.error {
-  padding: 40px;
-  text-align: center;
-  font-size: 16px;
-  color: #d32f2f;
-  background: #ffebee;
-  border-radius: 8px;
-}
-
-.kpi-section {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 15px;
-  margin-bottom: 25px;
-}
-
-.kpi-card {
-  padding: 20px;
-  border-radius: 8px;
-  color: white;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transition: all 0.3s ease;
-}
-
-.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16); }
-.kpi-icon { font-size: 32px; margin-bottom: 10px; }
-.kpi-number { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
-.kpi-label { font-size: 12px; opacity: 0.95; font-weight: 600; }
-
-.kpi-card.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-.kpi-card.red { background: linear-gradient(135deg, #ff4757 0%, #ee5a6f 100%); }
-.kpi-card.orange { background: linear-gradient(135deg, #ffa502 0%, #ff7675 100%); }
-.kpi-card.yellow { background: linear-gradient(135deg, #ffd93d 0%, #ffc107 100%); color: #333; }
-.kpi-card.green { background: linear-gradient(135deg, #6bcf7f 0%, #26de81 100%); }
-.kpi-card.at-risk { background: linear-gradient(135deg, #f5365c 0%, #ec250d 100%); }
-.kpi-card.replacement { background: linear-gradient(135deg, #9370db 0%, #7e57c2 100%); }
-.kpi-card.financial { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-
-.table-container { overflow-x: auto; border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; background: white; }
-table th, table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-table th { background-color: #f8f9fa; font-weight: 600; color: #003366; font-size: 13px; }
-table tbody tr:hover { background-color: #f8f9fa; }
-table td { font-size: 13px; }
-table td.rank { font-weight: 600; color: #003366; }
-table td.value { font-weight: 600; color: #00a86b; }
-
-@media (max-width: 768px) {
-  .main-content { padding: 15px; }
-  .kpi-section { grid-template-columns: repeat(2, 1fr); }
-  h2 { font-size: 22px; }
-}
-
-.lang-currency {
-  display: flex;
-  gap: 15px;
-  margin: 15px 0;
-  background: rgba(255,255,255,0.1);
-  padding: 12px;
-  border-radius: 6px;
-  width: fit-content;
-}
-
-.lang-currency select {
-  padding: 8px 12px;
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 4px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.lang-currency select option {
-  background: #003366;
-  color: white;
-}
-
-.lang-currency select:hover {
-  background: rgba(255,255,255,0.3);
+@media (max-width: 860px) {
+  .shell { flex-direction: column; height: auto; }
+  .sidebar { width: 100%; }
+  .side-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+  .nav-group { margin-top: 0 !important; }
+  .content { padding: 18px 16px 36px; }
 }

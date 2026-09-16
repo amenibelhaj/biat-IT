@@ -1,97 +1,168 @@
 import React, { useState, useEffect } from 'react';
+import {
+  ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine
+} from 'recharts';
 import { API_BASE_URL } from '../config';
 import { useLanguage } from '../contexts/LanguageContext';
-import '../styles/ReplacementRoadmap.css';
+import {
+  Panel, Kpi, Loading, EmptyState, ErrorState, ChartTooltip, Legend, fmtInt
+} from './ui';
+
+const MONTH_LABELS = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct', 'nov', 'déc'];
+
+function labelForMonth(ym) {
+  const [y, m] = String(ym).split('-');
+  return `${MONTH_LABELS[Number(m) - 1] || m} ${String(y).slice(2)}`;
+}
 
 export default function ReplacementRoadmap() {
-  const { formatCurrency } = useLanguage();
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { formatCurrency, formatCompact, t } = useLanguage();
+  const [rows, setRows] = useState([]);
+  const [state, setState] = useState('loading');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/strategic/dashboard/replacement-roadmap`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d) => { if (!cancelled) { setRows(Array.isArray(d) ? d : []); setState('ready'); } })
+      .catch((e) => { if (!cancelled) { setError(e.message); setState('error'); } });
+    return () => { cancelled = true; };
   }, []);
 
-  const loadData = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/strategic/dashboard/replacement-roadmap`);
-      const result = await response.json();
-      console.log('Roadmap data:', result);
-      setData(Array.isArray(result) ? result : []);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error:', err);
-      setData([]);
-      setLoading(false);
-    }
-  };
+  if (state === 'loading') return <Loading />;
+  if (state === 'error') return <ErrorState error={error} />;
+  if (!rows.length) return <EmptyState title={t('common.noData')} text={t('common.importFirst')} />;
 
-  if (loading) return <div className="loading">📅 Loading Replacement Roadmap...</div>;
+  const nowKey = new Date().toISOString().slice(0, 7);
 
-  const months = data.sort((a, b) => a.month.localeCompare(b.month));
-  const totalAssets = months.reduce((sum, m) => sum + parseInt(m.count || 0), 0);
-  const totalBudget = months.reduce((sum, m) => sum + parseFloat(m.total_value || 0), 0);
+  let running = 0;
+  const chartData = rows.map((r) => {
+    running += Number(r.total_value);
+    return {
+      month: r.month,
+      label: labelForMonth(r.month),
+      count: Number(r.count),
+      critical: Number(r.critical_count),
+      value: Number(r.total_value),
+      cumulative: running,
+      past: r.month < nowKey
+    };
+  });
+
+  const past = chartData.filter((d) => d.past);
+  const future = chartData.filter((d) => !d.past);
+  const next12 = future.slice(0, 12);
 
   return (
-    <div className="replacement-roadmap">
-      <h2>📅 Replacement Roadmap (24 Months)</h2>
-      <p className="subtitle">Monthly replacement timeline in Tunisian Dinars</p>
-
-      <div className="roadmap-summary">
-        <div className="summary-card">
-          <span>Total Assets Planned</span>
-          <strong>{totalAssets}</strong>
-        </div>
-        <div className="summary-card warning">
-          <span>Total Budget Required</span>
-          <strong>{formatCurrency(totalBudget)}</strong>
-        </div>
+    <>
+      <div className="page-head">
+        <h1 className="page-title">Plan de renouvellement</h1>
+        <p className="page-subtitle">
+          Échéancier mensuel sur 36 mois, avec cumul budgétaire
+        </p>
       </div>
 
-      {months.length === 0 ? (
-        <div className="no-data">No replacement dates scheduled</div>
-      ) : (
-        <div className="timeline">
-          <h3>📋 Monthly Replacement Timeline</h3>
-          {months.map((month, idx) => (
-            <div key={idx} className="month-block">
-              <div className="month-header">
-                <span className="month-label">{month.month}</span>
-                <span className="month-stats">
-                  {month.count} items
-                </span>
-                <span className="month-budget">
-                  {formatCurrency(month.total_value || 0)}
-                </span>
-              </div>
-              <div className="month-breakdown">
-                {month.critical_count > 0 && (
-                  <div className="item">
-                    <span className="label">🔴 Critical:</span>
-                    <span className="value">{month.critical_count}</span>
-                  </div>
-                )}
-                {month.high_count > 0 && (
-                  <div className="item">
-                    <span className="label">🟠 High:</span>
-                    <span className="value">{month.high_count}</span>
-                  </div>
-                )}
-                {month.count > (month.critical_count + month.high_count) && (
-                  <div className="item">
-                    <span className="label">🟡 Other:</span>
-                    <span className="value">{month.count - (month.critical_count + month.high_count)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="note">
-        <strong>📌 Note:</strong> All amounts in Tunisian Dinars (د.ت) - 1 USD = 3.1 TND
+      <div className="kpi-row">
+        <Kpi tone="red"    label="En retard"        value={fmtInt(past.reduce((s, d) => s + d.count, 0))}
+             note={formatCurrency(past.reduce((s, d) => s + d.value, 0))} />
+        <Kpi tone="orange" label="12 prochains mois" value={fmtInt(next12.reduce((s, d) => s + d.count, 0))}
+             note={formatCurrency(next12.reduce((s, d) => s + d.value, 0))} />
+        <Kpi tone="navy"   label="Total planifié"    value={fmtInt(chartData.reduce((s, d) => s + d.count, 0))}
+             note={`sur ${chartData.length} mois`} />
+        <Kpi tone="accent" label="Cumul budgétaire"  value={formatCompact(running)} note="fin de période" />
       </div>
-    </div>
+
+      <Panel
+        title="Échéancier de remplacement"
+        subtitle="Barres : nombre d'actifs par mois — Surface : budget cumulé"
+      >
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10.5, fill: 'var(--ink-3)' }}
+              tickLine={false}
+              axisLine={{ stroke: 'var(--line)' }}
+              interval="preserveStartEnd"
+              minTickGap={14}
+            />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 11, fill: 'var(--ink-3)' }}
+              tickLine={false} axisLine={false} allowDecimals={false}
+              width={34}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fontSize: 11, fill: 'var(--ink-3)' }}
+              tickLine={false} axisLine={false}
+              tickFormatter={(v) => formatCompact(v)}
+              width={70}
+            />
+            <Tooltip
+              cursor={{ fill: 'var(--surface-2)' }}
+              content={<ChartTooltip formatter={(v, name) =>
+                (name === 'Budget cumulé' ? formatCurrency(v) : `${v} actifs`)} />}
+            />
+            <ReferenceLine
+              yAxisId="left"
+              x={chartData.find((d) => !d.past)?.label}
+              stroke="var(--st-red)"
+              strokeDasharray="4 3"
+              label={{ value: "aujourd'hui", position: 'top', fontSize: 10, fill: 'var(--st-red)' }}
+            />
+            <Area
+              yAxisId="right" type="monotone" dataKey="cumulative" name="Budget cumulé"
+              stroke="#0a7ea4" strokeWidth={2} fill="#0a7ea4" fillOpacity={0.10}
+            />
+            <Bar yAxisId="left" dataKey="count" name="Actifs" fill="#1b3f6e" radius={[2, 2, 0, 0]} maxBarSize={26} />
+            <Bar yAxisId="left" dataKey="critical" name="Dont critiques" fill="#c2312d" radius={[2, 2, 0, 0]} maxBarSize={26} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <div style={{ marginTop: 10 }}>
+          <Legend items={[
+            { label: 'Actifs à remplacer', color: '#1b3f6e' },
+            { label: 'Dont critiques', color: '#c2312d' },
+            { label: 'Budget cumulé', color: '#0a7ea4' }
+          ]} />
+        </div>
+      </Panel>
+
+      <div style={{ height: 16 }} />
+
+      <Panel title="Détail mensuel">
+        <div className="table-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Mois</th>
+                <th className="right">Actifs</th>
+                <th className="right">Critiques</th>
+                <th className="right">Budget</th>
+                <th className="right">Cumul</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartData.map((d) => (
+                <tr key={d.month} style={d.past ? { background: 'var(--st-red-bg)' } : undefined}>
+                  <td className="strong mono">
+                    {d.month}
+                    {d.past && <span className="chip critical" style={{ marginLeft: 8 }}>retard</span>}
+                  </td>
+                  <td className="right num">{d.count}</td>
+                  <td className="right num">{d.critical}</td>
+                  <td className="right num">{formatCurrency(d.value)}</td>
+                  <td className="right num strong">{formatCurrency(d.cumulative)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </>
   );
 }

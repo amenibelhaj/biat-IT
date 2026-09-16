@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import './theme.css';
 import './App.css';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+
 import Import from './components/Import';
 import ImportHistory from './components/ImportHistory';
 import AssetInventory from './components/AssetInventory';
@@ -11,81 +13,106 @@ import ReplacementRoadmap from './components/ReplacementRoadmap';
 import LifecycleAnalysis from './components/LifecycleAnalysis';
 import FinancialSummary from './components/FinancialSummary';
 
+const SECTIONS = [
+  {
+    group: 'Pilotage',
+    items: [
+      { id: 'executive', key: 'nav.executive', Component: ExecutiveDashboard },
+      { id: 'risk',      key: 'nav.risk',      Component: RiskHeatMap },
+      { id: 'lifecycle', key: 'nav.lifecycle', Component: LifecycleAnalysis }
+    ]
+  },
+  {
+    group: 'Planification',
+    items: [
+      { id: 'roadmap',   key: 'nav.roadmap',   Component: ReplacementRoadmap },
+      { id: 'budget',    key: 'nav.budget',    Component: BudgetForecast },
+      { id: 'financial', key: 'nav.financial', Component: FinancialSummary }
+    ]
+  },
+  {
+    group: 'Données',
+    items: [
+      { id: 'inventory', key: 'nav.inventory', Component: AssetInventory },
+      { id: 'import',    key: 'nav.import',    Component: Import },
+      { id: 'history',   key: 'nav.history',   Component: ImportHistory }
+    ]
+  }
+];
+
+const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
+
 function AppContent() {
-  const [page, setPage] = useState('import');
+  const [page, setPage] = useState('executive');
   const { language, setLanguage, currency, setCurrency, t } = useLanguage();
 
+  const active = ALL_ITEMS.find((i) => i.id === page) || ALL_ITEMS[0];
+  const ActiveComponent = active.Component;
+
   return (
-    <div className="App">
-      <header className="header">
-        <div className="header-content">
-          <h1>🏦 BIAT IT ASSET LIFECYCLE MANAGEMENT</h1>
-          <p className="subtitle">Strategic Analysis & Obsolescence Management</p>
-          
-          <div className="lang-currency">
-            <select value={language} onChange={e => setLanguage(e.target.value)}>
-              <option value="en">🌐 English</option>
-              <option value="fr">🌐 Français</option>
-            </select>
-            <select value={currency} onChange={e => setCurrency(e.target.value)}>
-              <option value="USD">💵 USD</option>
-              <option value="TND">💱 TND (د.ت)</option>
-            </select>
-          </div>
-
-          <nav className="nav">
-            <button className={page === 'import' ? 'active' : ''} onClick={() => setPage('import')}>
-              📥 Import
-            </button>
-            <button className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>
-              📁 History
-            </button>
-            <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>
-              📦 Inventory
-            </button>
-            <button className={page === 'executive' ? 'active' : ''} onClick={() => setPage('executive')}>
-              📊 Executive
-            </button>
-            <button className={page === 'risk' ? 'active' : ''} onClick={() => setPage('risk')}>
-              🔥 Risk Map
-            </button>
-            <button className={page === 'budget' ? 'active' : ''} onClick={() => setPage('budget')}>
-              💰 Budget
-            </button>
-            <button className={page === 'roadmap' ? 'active' : ''} onClick={() => setPage('roadmap')}>
-              📅 Roadmap
-            </button>
-            <button className={page === 'lifecycle' ? 'active' : ''} onClick={() => setPage('lifecycle')}>
-              🔄 Lifecycle
-            </button>
-            <button className={page === 'financial' ? 'active' : ''} onClick={() => setPage('financial')}>
-              💼 Financial
-            </button>
-          </nav>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <img
+            src={`${process.env.PUBLIC_URL}/biat-logo.png`}
+            alt="BIAT Innovation & Technology"
+          />
         </div>
-      </header>
+        <div className="brand-caption">
+          <div className="brand-title">Gestion des actifs IT</div>
+          <div className="brand-sub">DSI — Cycle de vie & obsolescence</div>
+        </div>
 
-      <main className="main-content">
-        {page === 'import' && <Import />}
-        {page === 'history' && <ImportHistory />}
-        {page === 'inventory' && <AssetInventory />}
-        {page === 'executive' && <ExecutiveDashboard />}
-        {page === 'risk' && <RiskHeatMap />}
-        {page === 'budget' && <BudgetForecast />}
-        {page === 'roadmap' && <ReplacementRoadmap />}
-        {page === 'lifecycle' && <LifecycleAnalysis />}
-        {page === 'financial' && <FinancialSummary />}
+        <nav className="side-nav">
+          {SECTIONS.map((section) => (
+            <div className="nav-group" key={section.group}>
+              <div className="nav-group-label">{section.group}</div>
+              {section.items.map((item) => (
+                <button
+                  key={item.id}
+                  className={page === item.id ? 'nav-item active' : 'nav-item'}
+                  onClick={() => setPage(item.id)}
+                >
+                  {t(item.key)}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="side-foot">
+          <select
+            className="input"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            aria-label="Langue"
+          >
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
+          <select
+            className="input"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            aria-label="Devise"
+          >
+            <option value="TND">Dinar (DT)</option>
+            <option value="USD">Dollar ($)</option>
+          </select>
+        </div>
+      </aside>
+
+      <main className="content">
+        <ActiveComponent />
       </main>
     </div>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <LanguageProvider>
       <AppContent />
     </LanguageProvider>
   );
 }
-
-export default App;
