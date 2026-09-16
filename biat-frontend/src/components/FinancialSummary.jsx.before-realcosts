@@ -46,6 +46,7 @@ export default function FinancialSummary() {
 
   const totalNeeded = byType.reduce((s, r) => s + r.needed, 0);
   const portfolio = Number(totals.portfolio_value) || 0;
+  const realPriceRows = Number(totals.rows_with_real_price) || 0;
   const totalRows = Number(totals.total_rows) || 0;
 
   return (
@@ -57,16 +58,14 @@ export default function FinancialSummary() {
         </p>
       </div>
 
-      {Number(totals.estimated_rows) > 0 && (
-        <EstimateNotice rows={Number(totals.estimated_rows)} />
-      )}
+      <EstimateNotice />
 
-      {Number(totals.real_cost_rows) > 0 && Number(totals.estimated_rows) === 0 && (
-        <div className="notice info">
+      {realPriceRows === 0 && totalRows > 0 && (
+        <div className="notice warn">
           <div>
-            <b>Valorisation sur coûts réels.</b> Les {fmtInt(totalRows)} actifs sont
-            valorisés à partir des montants renseignés dans les fichiers importés.
-            Le catalogue de coûts estimés n'est pas utilisé.
+            <b>Aucun prix d'achat réel dans la base.</b> Les {fmtInt(totalRows)} actifs
+            sont valorisés au coût de remplacement estimé. Pour une analyse
+            d'amortissement, il faudra importer les coûts d'acquisition réels.
           </div>
         </div>
       )}

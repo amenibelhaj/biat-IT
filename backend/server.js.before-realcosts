@@ -268,20 +268,12 @@ app.get('/api/strategic/dashboard/budget-forecast', route(async (req, res) => {
     WHERE end_of_support < CURRENT_DATE
   `);
 
-  // How much of the valuation rests on the estimate catalogue rather than on
-  // real costs supplied in the source files.
-  const basis = await db.query(`
-    SELECT COUNT(*) FILTER (WHERE cost_is_estimated)::int     AS estimated_rows,
-           COUNT(*) FILTER (WHERE NOT cost_is_estimated)::int AS real_cost_rows
-    FROM v_assets_live
-  `);
-
   res.json({
     by_year: byYear.rows,
     by_year_type: byYearType.rows,
     overdue: overdue.rows[0],
-    basis: basis.rows[0],
-    currency: 'TND'
+    currency: 'TND',
+    note: 'Costs are estimates from the published replacement-cost catalogue.'
   });
 }));
 
@@ -360,8 +352,6 @@ app.get('/api/strategic/dashboard/financial-summary', route(async (req, res) => 
     SELECT COALESCE(SUM(estimated_replacement_cost), 0)::numeric AS portfolio_value,
            COALESCE(SUM(purchase_price), 0)::numeric AS known_acquisition_value,
            COUNT(*) FILTER (WHERE purchase_price IS NOT NULL)::int AS rows_with_real_price,
-           COUNT(*) FILTER (WHERE cost_is_estimated)::int          AS estimated_rows,
-           COUNT(*) FILTER (WHERE NOT cost_is_estimated)::int      AS real_cost_rows,
            COUNT(*)::int AS total_rows
     FROM v_assets_live
   `);

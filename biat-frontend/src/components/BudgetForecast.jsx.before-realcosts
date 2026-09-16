@@ -53,9 +53,7 @@ export default function BudgetForecast() {
         </p>
       </div>
 
-      {Number(data.basis?.estimated_rows) > 0 && (
-        <EstimateNotice rows={Number(data.basis.estimated_rows)} />
-      )}
+      <EstimateNotice />
 
       <div className="kpi-row">
         <Kpi tone="navy"   label="Besoin total"      value={formatCompact(totalCost)} note={`${fmtInt(byYear.reduce((s, r) => s + r.count, 0))} actifs`} />

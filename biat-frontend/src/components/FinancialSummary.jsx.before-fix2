@@ -46,6 +46,7 @@ export default function FinancialSummary() {
 
   const totalNeeded = byType.reduce((s, r) => s + r.needed, 0);
   const portfolio = Number(totals.portfolio_value) || 0;
+  const realPriceRows = Number(totals.rows_with_real_price) || 0;
   const totalRows = Number(totals.total_rows) || 0;
 
   return (

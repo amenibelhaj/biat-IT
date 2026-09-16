@@ -35,8 +35,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
   let updated = 0;
   let skipped = 0;
   let positionalRows = 0; // rows with no asset/serial number of their own
-  let estimatedRows = 0;  // rows valued from the estimate catalogue
-  let realCostRows = 0;   // rows valued from a real cost in the file
 
   const client = await db.connect();
   try {
@@ -81,55 +79,8 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
           : `${name}-${ip || 'sans-ip'}-L${rowNum}`
         ).trim().slice(0, 100);
 
-        // -------------------------------------------------------------
-        // VALORISATION
-        //
-        // Ordre de priorité, du plus fiable au moins fiable :
-        //   1. un coût de remplacement réel fourni dans le fichier
-        //   2. à défaut, le prix d'achat réel fourni dans le fichier
-        //   3. à défaut seulement, le catalogue de coûts estimés
-        //
-        // `cost_is_estimated` n'est vrai que dans le troisième cas, de sorte
-        // que l'interface ne signale « estimation » que lorsque c'en est
-        // réellement une. Dès que la BIAT renseigne ses coûts réels dans les
-        // fichiers, les tableaux de bord les utilisent sans aucune
-        // modification du code.
-        // -------------------------------------------------------------
-        const toNumber = (v) => {
-          if (v === null || v === undefined || v === '') return null;
-          // tolère "12 500,00", "12.500,00 DT", "12,500.00"
-          const cleaned = String(v)
-            .replace(/[^0-9.,-]/g, '')
-            .replace(/\s/g, '');
-          if (!cleaned) return null;
-          let n;
-          if (cleaned.includes(',') && cleaned.includes('.')) {
-            n = parseFloat(cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
-              ? cleaned.replace(/\./g, '').replace(',', '.')
-              : cleaned.replace(/,/g, ''));
-          } else {
-            n = parseFloat(cleaned.replace(',', '.'));
-          }
-          return isNaN(n) || n < 0 ? null : n;
-        };
-
         const estimate = estimateReplacementCost(description || type);
-
-        const realPrice = toNumber(pick(row, [
-          "Prix d'achat", 'Prix', 'Purchase Price', "Coût d'acquisition",
-          "Valeur d'acquisition", 'Montant'
-        ]));
-
-        const realReplacement = toNumber(pick(row, [
-          'Coût de remplacement', 'Prix de remplacement', 'Replacement Cost',
-          'Coût de renouvellement', 'Budget de remplacement'
-        ]));
-
-        const valuation = realReplacement !== null ? realReplacement
-                        : realPrice !== null ? realPrice
-                        : estimate.cost;
-        const valuationIsEstimated = (realReplacement === null && realPrice === null);
-        if (valuationIsEstimated) estimatedRows++; else realCostRows++;
+        const realPrice = pick(row, ['Prix d\'achat', 'Prix', 'Purchase Price']);
 
         const asset = {
           inventory_code: inventoryCode,
@@ -150,9 +101,9 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
           end_of_sales: parseDate(pick(row, ['end-of-sales', 'End of Sale', 'Date (End of Sale)'])),
           end_of_maintenance: parseDate(pick(row, ['end-of-maintenance', 'End of Maintenance', 'Date de fin de maintenance'])),
           end_of_support: endOfSupport,
-          purchase_price: realPrice,
-          estimated_replacement_cost: valuation,
-          cost_is_estimated: valuationIsEstimated,
+          purchase_price: realPrice !== null && !isNaN(parseFloat(realPrice)) ? parseFloat(realPrice) : null,
+          estimated_replacement_cost: estimate.cost,
+          cost_is_estimated: !(realPrice !== null && !isNaN(parseFloat(realPrice))),
           budget_code: pick(row, ['Budget', 'Centre de coût', 'Cost Center']) || 'NON AFFECTÉ',
           notes: pick(row, ['Commentaire', 'Notes'])
         };
@@ -210,15 +161,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
       }
     }
 
-    if (realCostRows > 0) {
-      warnings.unshift(
-        `${realCostRows} ligne(s) valorisée(s) avec les coûts réels du fichier` +
-        (estimatedRows > 0
-          ? `, ${estimatedRows} ligne(s) avec le catalogue de coûts estimés.`
-          : ' — le catalogue de coûts estimés n\'est plus utilisé.')
-      );
-    }
-
     if (positionalRows > 0) {
       warnings.unshift(
         `${positionalRows} ligne(s) sans numéro d'asset ni numéro de série : ` +
@@ -251,8 +193,7 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
     client.release();
   }
 
-  return { imported, updated, skipped, total: rows.length, errors, warnings,
-           estimatedRows, realCostRows };
+  return { imported, updated, skipped, total: rows.length, errors, warnings };
 }
 
 module.exports = { importExcelAssets };

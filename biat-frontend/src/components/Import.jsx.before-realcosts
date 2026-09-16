@@ -194,8 +194,6 @@ export default function Import() {
               <tr><td className="strong">Fin de support</td><td className="mono">end-of-support · Fin de support · End of Support</td></tr>
               <tr><td className="strong">Fin de maintenance</td><td className="mono">end-of-maintenance · Date de fin de maintenance</td></tr>
               <tr><td className="strong">Fin de commercialisation</td><td className="mono">end-of-sales · End of Sale</td></tr>
-              <tr><td className="strong">Prix d'achat</td><td className="mono">Prix d'achat · Coût d'acquisition · Valeur d'acquisition · Montant</td></tr>
-              <tr><td className="strong">Coût de remplacement</td><td className="mono">Coût de remplacement · Coût de renouvellement · Budget de remplacement</td></tr>
             </tbody>
           </table>
         </div>
@@ -219,14 +217,10 @@ export default function Import() {
           <>
             <div className="notice warn">
               <div>
-                Ce catalogue n'est utilisé que <b>par défaut</b>, pour les lignes dont le
-                fichier ne renseigne aucun montant. L'ordre de priorité est le suivant :
-                <b>1.</b> le coût de remplacement indiqué dans le fichier, <b>2.</b> à défaut
-                le prix d'achat indiqué dans le fichier, <b>3.</b> à défaut seulement, le
-                catalogue ci-dessous. Il suffit donc d'ajouter une colonne
-                « Prix d'achat » ou « Coût de remplacement » à vos extractions pour que
-                les tableaux de bord se basent sur vos montants réels, sans aucune
-                modification de l'application.
+                Ces montants sont des <b>estimations de planification</b>, exprimées en
+                dinar tunisien. Ils servent à ordonner les priorités budgétaires, pas à
+                établir un engagement financier. Dès que BIAT fournit les coûts réels,
+                ceux-ci sont utilisés en priorité.
               </div>
             </div>
             <div className="table-wrap">
