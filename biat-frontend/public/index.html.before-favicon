@@ -2,15 +2,11 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" type="image/png" href="%PUBLIC_URL%/logo32.png" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0b2545" />
     <meta name="description" content="Gestion du cycle de vie et de l'obsolescence des actifs IT — BIAT" />
-
-    <!-- Onglet du navigateur. Le .ico est déclaré en premier et couvre tous les
-         navigateurs ; les PNG servent aux écrans haute densité. -->
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/logo32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/logo192.png" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
@@ -21,7 +17,7 @@
       rel="stylesheet"
     />
 
-    <title>BIAT — Gestion des actifs IT</title>
+    <title>BIAT — Gestion du cycle de vie des actifs IT</title>
   </head>
   <body>
     <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
