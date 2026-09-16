@@ -213,31 +213,6 @@ export default function AssetInventory() {
                   </tr>
                 </tbody>
               </table>
-
-              {/* Colonnes du fichier source non reconnues par le mapping
-                  standard : elles sont conservées et affichées ici plutôt
-                  que perdues à l'import. */}
-              {selected.extra_attributes &&
-                Object.keys(selected.extra_attributes).length > 0 && (
-                <>
-                  <div className="section-title" style={{ marginTop: 18, marginBottom: 4 }}>
-                    Informations complémentaires
-                  </div>
-                  <div className="section-sub" style={{ marginBottom: 8 }}>
-                    Colonnes issues du fichier importé, conservées telles quelles
-                  </div>
-                  <table className="data">
-                    <tbody>
-                      {Object.entries(selected.extra_attributes).map(([key, value]) => (
-                        <tr key={key}>
-                          <td>{key}</td>
-                          <td className="strong">{String(value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
             </div>
           </div>
         </div>

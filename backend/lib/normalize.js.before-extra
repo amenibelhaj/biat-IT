@@ -137,71 +137,11 @@ function pickEndOfSupport(row) {
   return dates.length ? dates[dates.length - 1] : null;
 }
 
-
-/**
- * Tous les intitulés de colonnes reconnus par le mapping standard.
- * Sert à identifier, par différence, les colonnes que le fichier apporte
- * en plus — afin de les conserver au lieu de les ignorer.
- */
-const KNOWN_COLUMNS = new Set([
-  // identification
-  'Nom', "Nom de l'équipement", 'Name',
-  'Description', 'Sous-classe de CI', 'Type',
-  'Numéro de série', 'Serial Number', 'S/N',
-  'Numéro Asset', 'Code inventaire', 'Asset Number',
-  'IP', 'Adresse IP', 'IP Address',
-  // localisation et matériel
-  'Site->Nom', 'Site', "Site d'implantation",
-  'Marque->Nom', 'Marque', 'Constructeur', 'Brand',
-  'Modèle->Nom', 'Modèle', 'Modèle exact', 'Model',
-  // état
-  'Statut', 'Status', 'Statut actuel',
-  'Criticité', 'Criticality', 'Niveau de criticité',
-  'Version OS', 'Version IOS->Nom complet', 'Version IOS', 'Firmware',
-  // dates
-  "Date d'achat", "Date d'acquisition",
-  'Date de mise en production', 'Date mise en service',
-  'Date de fin de garantie', 'Fin de garantie',
-  'end-of-sales', 'End of Sale', 'Date (End of Sale)',
-  'end-of-maintenance', 'End of Maintenance', 'Date de fin de maintenance',
-  'end-of-support', 'end-of-support_1', 'end-of-support.1',
-  'End of Support', 'Fin de support', 'Date de fin de support constructeur',
-  // montants
-  "Prix d'achat", 'Prix', 'Purchase Price', "Coût d'acquisition",
-  "Valeur d'acquisition", 'Montant',
-  'Coût de remplacement', 'Prix de remplacement', 'Replacement Cost',
-  'Coût de renouvellement', 'Budget de remplacement',
-  // divers
-  'Budget', 'Centre de coût', 'Cost Center',
-  'Commentaire', 'Notes'
-]);
-
-/**
- * Renvoie les colonnes du fichier qui ne correspondent à aucun champ connu,
- * sous forme d'objet { intitulé: valeur }. Les colonnes vides sont écartées,
- * ainsi que celles générées par SheetJS pour les en-têtes sans nom
- * (« __EMPTY », « __EMPTY_1 », …).
- */
-function collectExtras(row) {
-  const extras = {};
-  for (const [key, value] of Object.entries(row)) {
-    if (KNOWN_COLUMNS.has(key)) continue;
-    if (/^__EMPTY/.test(key)) continue;
-    if (value === null || value === undefined) continue;
-    const text = String(value).trim();
-    if (!text || ['n/a', 'na', 'nan', 'nat', '-'].includes(text.toLowerCase())) continue;
-    extras[key] = value instanceof Date ? value.toISOString().split('T')[0] : value;
-  }
-  return Object.keys(extras).length ? extras : null;
-}
-
 module.exports = {
   normalizeStatus,
   normalizeCriticality,
   normalizeType,
   parseDate,
   pick,
-  pickEndOfSupport,
-  collectExtras,
-  KNOWN_COLUMNS
+  pickEndOfSupport
 };

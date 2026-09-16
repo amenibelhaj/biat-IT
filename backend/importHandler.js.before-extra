@@ -18,7 +18,7 @@ const db = require('./db');
 const { estimateReplacementCost } = require('./lib/costCatalog');
 const {
   normalizeStatus, normalizeCriticality, normalizeType,
-  parseDate, pick, pickEndOfSupport, collectExtras
+  parseDate, pick, pickEndOfSupport
 } = require('./lib/normalize');
 
 async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'replace') {
@@ -36,7 +36,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
   let skipped = 0;
   let positionalRows = 0; // rows with no asset/serial number of their own
   let estimatedRows = 0;  // rows valued from the estimate catalogue
-  const extraColumnNames = new Set(); // unrecognised columns preserved as-is
   let realCostRows = 0;   // rows valued from a real cost in the file
 
   const client = await db.connect();
@@ -155,15 +154,8 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
           estimated_replacement_cost: valuation,
           cost_is_estimated: valuationIsEstimated,
           budget_code: pick(row, ['Budget', 'Centre de coût', 'Cost Center']) || 'NON AFFECTÉ',
-          notes: pick(row, ['Commentaire', 'Notes']),
-          // Toute colonne non reconnue est conservée telle quelle plutôt
-          // qu'ignorée : la BIAT peut enrichir ses extractions sans perte.
-          extra_attributes: collectExtras(row)
+          notes: pick(row, ['Commentaire', 'Notes'])
         };
-
-        if (asset.extra_attributes) {
-          Object.keys(asset.extra_attributes).forEach((k) => extraColumnNames.add(k));
-        }
 
         const result = await client.query(`
           INSERT INTO assets (
@@ -172,10 +164,10 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
             acquisition_date, production_start_date, warranty_end_date,
             end_of_sales, end_of_maintenance, end_of_support,
             purchase_price, estimated_replacement_cost, cost_is_estimated,
-            budget_code, notes, extra_attributes, created_at, updated_at
+            budget_code, notes, created_at, updated_at
           ) VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-            $19,$20,$21,$22,$23,$24, NOW(), NOW()
+            $19,$20,$21,$22,$23, NOW(), NOW()
           )
           ON CONFLICT (inventory_code) DO UPDATE SET
             name = EXCLUDED.name,
@@ -198,7 +190,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
             purchase_price = COALESCE(EXCLUDED.purchase_price, assets.purchase_price),
             estimated_replacement_cost = EXCLUDED.estimated_replacement_cost,
             cost_is_estimated = EXCLUDED.cost_is_estimated,
-            extra_attributes = COALESCE(EXCLUDED.extra_attributes, assets.extra_attributes),
             updated_at = NOW()
           RETURNING (xmax = 0) AS inserted
         `, [
@@ -208,8 +199,7 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
           asset.production_start_date, asset.warranty_end_date, asset.end_of_sales,
           asset.end_of_maintenance, asset.end_of_support, asset.purchase_price,
           asset.estimated_replacement_cost, asset.cost_is_estimated,
-          asset.budget_code, asset.notes,
-          asset.extra_attributes ? JSON.stringify(asset.extra_attributes) : null
+          asset.budget_code, asset.notes
         ]);
 
         if (result.rows[0] && result.rows[0].inserted) imported++;
@@ -218,15 +208,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
         skipped++;
         errors.push(`Row ${rowNum}: ${err.message}`);
       }
-    }
-
-    if (extraColumnNames.size > 0) {
-      warnings.unshift(
-        `${extraColumnNames.size} colonne(s) supplémentaire(s) conservée(s) et ` +
-        `consultable(s) dans la fiche de chaque actif : ` +
-        `${[...extraColumnNames].slice(0, 6).join(', ')}` +
-        (extraColumnNames.size > 6 ? `, …` : '.')
-      );
     }
 
     if (realCostRows > 0) {
@@ -271,8 +252,7 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
   }
 
   return { imported, updated, skipped, total: rows.length, errors, warnings,
-           estimatedRows, realCostRows,
-           extraColumns: [...extraColumnNames] };
+           estimatedRows, realCostRows };
 }
 
 module.exports = { importExcelAssets };
