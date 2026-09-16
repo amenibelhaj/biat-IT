@@ -34,7 +34,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
   let imported = 0;
   let updated = 0;
   let skipped = 0;
-  let positionalRows = 0; // rows with no asset/serial number of their own
 
   const client = await db.connect();
   try {
@@ -58,25 +57,14 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
           warnings.push(`Row ${rowNum} (${name}): no end-of-support date — cannot be classified`);
         }
 
-        // A stable identifier for the asset.
-        //
-        // Asset number and serial number are the real identifiers. When the
-        // source file has neither — as in the anonymised BIAT network
-        // extract, where every row is named "Routeur AGENCE XX" and the IPs
-        // are masked to a handful of values — there is NO field that
-        // distinguishes one row from another. Falling back to name + IP
-        // would silently merge 18 distinct switches into one record, so the
-        // row's position in the file is included to keep every row separate.
+        // A stable identifier. Serial number is preferred, then the asset
+        // number, then a deterministic fallback built from name + IP so
+        // re-importing the same file does not create duplicates.
         const serial = pick(row, ['Numéro de série', 'Serial Number', 'S/N']);
         const assetNo = pick(row, ['Numéro Asset', 'Code inventaire', 'Asset Number']);
         const ip = pick(row, ['IP', 'Adresse IP', 'IP Address']);
-        const hasRealIdentifier = Boolean(assetNo || serial);
-
-        if (!hasRealIdentifier) positionalRows++;
-
-        const inventoryCode = (hasRealIdentifier
-          ? String(assetNo || serial)
-          : `${name}-${ip || 'sans-ip'}-L${rowNum}`
+        const inventoryCode = String(
+          assetNo || serial || `${name}-${ip || idx}`
         ).trim().slice(0, 100);
 
         const estimate = estimateReplacementCost(description || type);
@@ -159,15 +147,6 @@ async function importExcelAssets(filePath, originalFilename, fileSize, mode = 'r
         skipped++;
         errors.push(`Row ${rowNum}: ${err.message}`);
       }
-    }
-
-    if (positionalRows > 0) {
-      warnings.unshift(
-        `${positionalRows} ligne(s) sans numéro d'asset ni numéro de série : ` +
-        `elles sont identifiées par leur position dans le fichier. ` +
-        `Utilisez le mode « Remplacer » pour ce fichier — le mode « Compléter » ` +
-        `créerait des doublons à chaque réimport.`
-      );
     }
 
     await client.query(`
