@@ -199,15 +199,14 @@ export default function Import() {
             </tbody>
           </table>
         </div>
-        <div className="notice info" style={{ marginTop: 14 }}>
-          <div>
-            <b>Colonnes supplémentaires.</b> Une colonne dont l'intitulé ne figure pas
-            ci-dessus n'est pas ignorée : son contenu est conservé et affiché dans la
-            fiche détaillée de l'actif, sous « Informations complémentaires ». Vous
-            pouvez donc enrichir vos extractions librement, sans perte d'information.
-          </div>
-        </div>
-
+        <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 12, lineHeight: 1.55 }}>
+          La colonne <span className="mono">end-of-support</span> apparaît deux fois dans
+          l'extraction réseau BIAT, une fois en texte et une fois en date. Les deux sont
+          lues et la date la plus tardive est retenue. Le type d'équipement est déterminé
+          à partir de la colonne <span className="mono">Description</span> et non du nom,
+          car tous les équipements de l'extraction sont nommés « Routeur AGENCE XX »
+          y compris les switches.
+        </p>
       </Panel>
 
       <div style={{ height: 16 }} />
