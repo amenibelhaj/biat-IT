@@ -1,0 +1,85 @@
+# =====================================================================
+# Déploiement interne BIAT — pile complète sur une VM
+#
+#   db        PostgreSQL 16, données persistées dans un volume Docker
+#   backend   API Node.js, non exposée hors de la VM
+#   web       Nginx : sert l'interface et relaie /api vers le backend
+#
+# Seul le port 80 (ou 443) de la VM est exposé. La base et l'API ne sont
+# accessibles que depuis le réseau interne des conteneurs.
+#
+#   Démarrage :  docker compose up -d
+#   Journaux  :  docker compose logs -f
+#   Arrêt     :  docker compose down
+# =====================================================================
+
+services:
+  db:
+    image: postgres:16
+    container_name: biat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-biat_assets}
+      POSTGRES_USER: ${POSTGRES_USER:-biat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?mot de passe obligatoire dans .env}
+      # C.UTF-8 est présente dans l'image Debian officielle. L'encodage UTF8
+      # est indispensable : les libellés accentués (Criticité, Modèle, noms
+      # de sites) seraient corrompus avec l'encodage par défaut.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - biat_pgdata:/var/lib/postgresql/data
+      # Les fichiers SQL de ce dossier sont exécutés dans l'ordre
+      # alphabétique au tout premier démarrage uniquement.
+      - ../backend/database_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./init-migrations.sh:/docker-entrypoint-initdb.d/02_migrations.sh:ro
+      - ../backend/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-biat} -d ${POSTGRES_DB:-biat_assets}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Aucun port publié : la base n'est pas joignable depuis l'extérieur.
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+      args:
+        # Renseignés dans .env si la VM sort par un proxy d'entreprise.
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: biat-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-biat}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biat_assets}
+      DATABASE_SSL: disable          # réseau interne des conteneurs
+      FRONTEND_URL: ${FRONTEND_URL:-}
+    # Aucun port publié : l'API n'est jointe que par Nginx.
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        # Chemin relatif : l'interface appelle /api sur sa propre origine,
+        # ce qui évite toute question de CORS et d'adresse en dur.
+        REACT_APP_API_URL: /api
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: biat-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-80}:80"
+
+volumes:
+  biat_pgdata:
+    name: biat_pgdata

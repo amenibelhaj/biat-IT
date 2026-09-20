@@ -1,0 +1,35 @@
+# Installation sans Docker — service systemd de l'API.
+#
+#   sudo cp biat-backend.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now biat-backend
+#   sudo systemctl status biat-backend
+
+[Unit]
+Description=BIAT — API de gestion du cycle de vie des actifs IT
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=biat
+Group=biat
+WorkingDirectory=/opt/biat-asset-management/backend
+EnvironmentFile=/opt/biat-asset-management/backend/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+
+# Cloisonnement du service
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/biat-asset-management/backend/uploads
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=biat-backend
+
+[Install]
+WantedBy=multi-user.target

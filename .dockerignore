@@ -1,0 +1,26 @@
+# Exclut du contexte de build ce qui ne doit jamais entrer dans une image.
+#
+# node_modules est le point critique : les modules compilés sur un poste
+# Windows ou macOS ne fonctionnent pas dans un conteneur Linux. Sans cette
+# exclusion, l'image serait à la fois énorme et potentiellement cassée.
+
+node_modules
+**/node_modules
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+
+.git
+.gitignore
+**/*.md
+!deploy/INSTALLATION.md
+
+**/uploads/*
+!**/uploads/.gitkeep
+
+**/*.log
+**/.DS_Store
+**/coverage
+_backup_before_upgrade
+*.before-*

@@ -16,3 +16,7 @@ node_modules/
 
 # Database backups
 backend/biat_assets_backup.sql
+
+# Config templates must be versioned
+!.env.example
+!**/.env.example
