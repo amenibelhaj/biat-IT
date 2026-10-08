@@ -1,11 +1,39 @@
 # BIAT IT Asset Lifecycle & Obsolescence Management
 
-Web application for tracking the lifecycle and obsolescence risk of a bank's IT
-assets (servers, network equipment, software licences), replacing manual
-Excel-based tracking.
+Web application built for **BIAT** (Banque Internationale Arabe de Tunisie) to
+track the lifecycle and obsolescence risk of the bank's IT assets — servers,
+network equipment, storage, security appliances and software — replacing
+manual Excel-based tracking with live dashboards and renewal planning.
+
+**Live demo:** [biat-it-frontend.onrender.com](https://biat-it-frontend.onrender.com) — runs on demo data only; free hosting sleeps when idle, so the first load can take ~1 minute.
+
+![React](https://img.shields.io/badge/React-CRA-61DAFB?logo=react&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=nodedotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
+
+## Features
+
+- **Excel / CSV import** of the bank's equipment inventory, with normalisation,
+  import history and per-import detail
+- **Automatic obsolescence classification** from end-of-support dates:
+  expired (red), under 6 months (orange), under 12 months (yellow), supported (green),
+  recalculated live every day
+- **Executive dashboard** — fleet-wide KPIs at a glance
+- **Risk heat map** crossing business criticality with obsolescence level
+- **Replacement roadmap** and **budget forecast**, using real costs from the
+  imported file or a built-in cost catalogue when none is given
+- **Lifecycle analysis** and **financial summary** per family, site and budget line
+- **Bilingual interface** (French / English)
+- **Two deployment targets:** free cloud hosting (Render + Neon) for demos, and a
+  hardened **internal VM deployment** (Docker Compose + Nginx) so bank data never
+  leaves BIAT's infrastructure — see [`deploy/INSTALLATION.md`](deploy/INSTALLATION.md)
+
+## Tech stack
 
 - **Backend:** Node.js / Express / PostgreSQL (`backend/`)
-- **Frontend:** React (Create React App) (`biat-frontend/`)
+- **Frontend:** React (Create React App) with charts and dashboards (`biat-frontend/`)
+- **Deployment:** Docker, Nginx, systemd, Render Blueprint
 
 ## Project structure
 
